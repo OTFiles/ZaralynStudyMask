@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/gradeCard"
+    android:layout_width="wrap_content"
+    android:layout_height="@dimen/grade_card_height"
+    android:layout_marginEnd="@dimen/margin_small"
+    android:clickable="true"
+    android:focusable="true"
+    app:cardCornerRadius="8dp"
+    app:cardElevation="2dp">
+
+    <LinearLayout
+        android:id="@+id/gradeCardContent"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:background="@color/gray_light"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/margin_medium"
+        android:paddingEnd="@dimen/margin_large">
+
+        <ImageView
+            android:id="@+id/gradeIcon"
+            android:layout_width="@dimen/icon_size_medium"
+            android:layout_height="@dimen/icon_size_medium"
+            android:layout_marginEnd="@dimen/margin_small"
+            android:src="@drawable/ic_school"
+            app:tint="@color/md_theme_primary" />
+
+        <TextView
+            android:id="@+id/gradeName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

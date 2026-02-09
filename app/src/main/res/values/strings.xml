@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">高中英语</string>
+    <string name="grade_10">高一</string>
+    <string name="grade_11">高二</string>
+    <string name="grade_12">高三</string>
+    <string name="tab_home">主页</string>
+    <string name="tab_explore">课外</string>
+    <string name="tab_settings">设置</string>
+    <string name="setting_night_mode">夜间模式</string>
+    <string name="setting_auto_play">自动播放音频</string>
+    <string name="setting_privacy_policy">隐私政策</string>
+    <string name="setting_user_agreement">用户协议</string>
+    <string name="setting_version">版本信息</string>
+    <string name="explore_title">课外学习</string>
+    <string name="explore_coming_soon">功能开发中...</string>
+    <string name="book_compulsory_1">必修一</string>
+    <string name="book_compulsory_2">必修二</string>
+    <string name="book_grammar">英语语法</string>
+    <string name="book_vocabulary">词汇手册</string>
+    <string name="book_compulsory_3">必修三</string>
+    <string name="book_compulsory_4">必修四</string>
+    <string name="book_reading">阅读训练</string>
+    <string name="book_writing">写作指南</string>
+    <string name="book_compulsory_5">必修五</string>
+    <string name="book_elective_6">选修六</string>
+    <string name="book_exam_papers">高考真题</string>
+    <string name="book_sprint_review">冲刺复习</string>
+</resources>
