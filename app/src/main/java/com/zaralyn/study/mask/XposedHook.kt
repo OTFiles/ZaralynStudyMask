@@ -155,25 +155,19 @@ class XposedHook : IXposedHookLoadPackage {
                             
                             val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                             
-                            // 重置所有标志，确保每次启动都显示伪装界面
-                            val showOriginal = prefs.getBoolean(KEY_SHOW_ORIGINAL, false)
-                            val uiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
+                            // 检查Intent extras中是否有show_original_app标志
+                            val showOriginalFromIntent = intent?.getBooleanExtra("show_original_app", false) ?: false
                             
-                            if (showOriginal) {
-                                logToAll("Resetting KEY_SHOW_ORIGINAL from true to false")
-                                prefs.edit().putBoolean(KEY_SHOW_ORIGINAL, false).apply()
-                            }
-                            
-                            if (uiReplaced) {
-                                logToAll("Resetting KEY_UI_REPLACED from true to false")
-                                prefs.edit().putBoolean(KEY_UI_REPLACED, false).apply()
+                            if (showOriginalFromIntent) {
+                                logToAll("show_original_app flag found in intent, showing original app")
+                                return
                             }
                             
                             logToAll("Replacing UI via ActivityThread hook")
                             
                             // 检查是否已经替换过，避免重复替换
-                            val currentUiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
-                            if (!currentUiReplaced) {
+                            val uiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
+                            if (!uiReplaced) {
                                 activity.window.decorView.post {
                                     try {
                                         replaceActivityUI(activity, prefs)
@@ -241,25 +235,19 @@ class XposedHook : IXposedHookLoadPackage {
                                 
                                 val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                                 
-                                // 重置所有标志，确保每次启动都显示伪装界面
-                                val showOriginal = prefs.getBoolean(KEY_SHOW_ORIGINAL, false)
-                                val uiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
+                                // 检查Intent extras中是否有show_original_app标志
+                                val showOriginalFromIntent = intent?.getBooleanExtra("show_original_app", false) ?: false
                                 
-                                if (showOriginal) {
-                                    logToAll("Resetting KEY_SHOW_ORIGINAL from true to false")
-                                    prefs.edit().putBoolean(KEY_SHOW_ORIGINAL, false).apply()
-                                }
-                                
-                                if (uiReplaced) {
-                                    logToAll("Resetting KEY_UI_REPLACED from true to false")
-                                    prefs.edit().putBoolean(KEY_UI_REPLACED, false).apply()
+                                if (showOriginalFromIntent) {
+                                    logToAll("show_original_app flag found in intent, showing original app")
+                                    return
                                 }
                                 
                                 logToAll("Replacing UI via ActivityThread hook")
                                 
                                 // 检查是否已经替换过，避免重复替换
-                                val currentUiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
-                                if (!currentUiReplaced) {
+                                val uiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
+                                if (!uiReplaced) {
                                     activity.window.decorView.post {
                                         try {
                                             replaceActivityUI(activity, prefs)
@@ -654,10 +642,6 @@ class XposedHook : IXposedHookLoadPackage {
         logToAll("Replacing activity UI")
         
         try {
-            // 重置显示原应用的标志，确保每次启动都显示伪装界面
-            prefs.edit().putBoolean(KEY_SHOW_ORIGINAL, false).apply()
-            logToAll("Reset KEY_SHOW_ORIGINAL to false")
-            
             // 保存原视图
             val decorView = activity.window.decorView
             val contentView = decorView.findViewById<ViewGroup>(android.R.id.content)
@@ -703,8 +687,10 @@ class XposedHook : IXposedHookLoadPackage {
         // 可滚动内容区
         val scrollView = ScrollView(activity)
         scrollView.setBackgroundColor(Color.parseColor(COLOR_SURFACE))
+        scrollView.id = android.R.id.custom  // 使用预定义的ID标识ScrollView
         
         val contentLayout = createContentLayout(activity, prefs)
+        contentLayout.id = android.R.id.list  // 使用预定义的ID标识内容布局
         scrollView.addView(contentLayout)
         
         rootLayout.addView(scrollView, LinearLayout.LayoutParams(
@@ -871,66 +857,40 @@ class XposedHook : IXposedHookLoadPackage {
             logToAll("Grade clicked: $gradeName (Level: $gradeLevel)")
             currentGrade = gradeLevel
             prefs.edit().putInt(KEY_SELECTED_GRADE, gradeLevel).apply()
+            logToAll("Saved current grade: $gradeLevel to SharedPreferences")
             
             try {
-                // 刷新课本列表 - 使用安全的类型转换
+                // 使用ID准确定位并刷新内容
                 val contentView = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
                 if (contentView == null || contentView.childCount == 0) {
                     logToAll("Content view not found or empty")
                     return@setOnClickListener
                 }
                 
-                // 安全地遍历视图层级查找 rootLayout
-                var rootLayout: LinearLayout? = null
-                
-                // 尝试第一层
-                val firstChild = contentView.getChildAt(0)
-                if (firstChild is LinearLayout) {
-                    rootLayout = firstChild
-                } else if (firstChild is ScrollView) {
-                    // 如果是ScrollView，获取其子元素
-                    val scrollViewChild = firstChild.getChildAt(0)
-                    if (scrollViewChild is LinearLayout) {
-                        rootLayout = scrollViewChild
-                    }
-                } else if (firstChild is android.view.ViewGroup) {
-                    // 递归查找LinearLayout
-                    for (i in 0 until firstChild.childCount) {
-                        val grandChild = firstChild.getChildAt(i)
-                        if (grandChild is ScrollView) {
-                            val scrollViewChild = grandChild.getChildAt(0)
-                            if (scrollViewChild is LinearLayout) {
-                                rootLayout = scrollViewChild
-                                break
-                            }
-                        } else if (grandChild is LinearLayout) {
-                            rootLayout = grandChild
-                            break
-                        }
-                    }
-                }
-                
-                if (rootLayout == null) {
-                    logToAll("Root layout not found")
+                // 查找ScrollView
+                val scrollView = contentView.findViewById<ScrollView>(android.R.id.custom)
+                if (scrollView == null) {
+                    logToAll("ScrollView not found")
                     return@setOnClickListener
                 }
                 
-                // 找到课本列表并更新
-                for (i in 0 until rootLayout.childCount) {
-                    val child = rootLayout.getChildAt(i)
-                    if (child is TextView && child.text.toString() == "课本列表") {
-                        // 找到了课本列表标题，替换下一个子元素
-                        if (i + 1 < rootLayout.childCount) {
-                            val oldBookList = rootLayout.getChildAt(i + 1)
-                            rootLayout.removeView(oldBookList)
-                            rootLayout.addView(createBookList(activity, prefs), i + 1)
-                        }
-                        break
-                    }
+                // 查找内容布局
+                val contentLayout = scrollView.findViewById<LinearLayout>(android.R.id.list)
+                if (contentLayout == null) {
+                    logToAll("Content layout not found")
+                    return@setOnClickListener
                 }
                 
-                // 刷新年级卡片状态
-                refreshGradeCards(activity, rootLayout, prefs)
+                // 移除旧的内容布局，添加新的
+                val parent = scrollView as android.view.ViewGroup
+                parent.removeView(contentLayout)
+                
+                val newContentLayout = createContentLayout(activity, prefs)
+                newContentLayout.id = android.R.id.list
+                parent.addView(newContentLayout)
+                
+                logToAll("Content layout refreshed successfully")
+                
             } catch (e: Exception) {
                 logToAll("Error refreshing grade selection: ${e.message}")
                 e.printStackTrace()
@@ -959,22 +919,6 @@ class XposedHook : IXposedHookLoadPackage {
         drawable.setStroke(borderWidth, borderColor)
         drawable.cornerRadius = (16 * activity.resources.displayMetrics.density).toFloat()
         return drawable
-    }
-    
-    // 刷新年级卡片状态
-    private fun refreshGradeCards(activity: Activity, rootLayout: LinearLayout, prefs: android.content.SharedPreferences) {
-        // 找到年级选择区域并刷新
-        for (i in 0 until rootLayout.childCount) {
-            val child = rootLayout.getChildAt(i)
-            if (child is TextView && child.text.toString() == "选择年级") {
-                if (i + 1 < rootLayout.childCount) {
-                    val oldGradeRow = rootLayout.getChildAt(i + 1)
-                    rootLayout.removeView(oldGradeRow)
-                    rootLayout.addView(createGradeRow(activity, prefs), i + 1)
-                }
-                break
-            }
-        }
     }
     
     private fun createBookList(activity: Activity, prefs: android.content.SharedPreferences): LinearLayout {
@@ -1214,31 +1158,38 @@ class XposedHook : IXposedHookLoadPackage {
             logToAll("Navigation clicked: $title")
             
             try {
-                // 找到ScrollView并替换内容
+                // 使用ID准确定位ScrollView
                 val contentView = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
-                if (contentView != null && contentView.childCount > 0) {
-                    val firstChild = contentView.getChildAt(0)
-                    if (firstChild is LinearLayout) {
-                        // 找到ScrollView（第二个子元素）
-                        for (i in 0 until firstChild.childCount) {
-                            val child = firstChild.getChildAt(i)
-                            if (child is ScrollView) {
-                                // 替换ScrollView的内容
-                                child.removeAllViews()
-                                val newContent = when (title) {
-                                    "课外" -> createExploreContent(activity)
-                                    "设置" -> createSettingsContent(activity, prefs)
-                                    else -> createContentLayout(activity, prefs)
-                                }
-                                child.addView(newContent)
-                                break
-                            }
-                        }
-                        
-                        // 更新导航栏选中状态
-                        updateNavigationSelection(activity, title)
-                    }
+                if (contentView == null || contentView.childCount == 0) {
+                    logToAll("Content view not found or empty")
+                    return@setOnClickListener
                 }
+                
+                val firstChild = contentView.getChildAt(0)
+                if (firstChild !is LinearLayout) {
+                    logToAll("Root view is not LinearLayout")
+                    return@setOnClickListener
+                }
+                
+                // 查找ScrollView
+                val scrollView = firstChild.findViewById<ScrollView>(android.R.id.custom)
+                if (scrollView == null) {
+                    logToAll("ScrollView not found")
+                    return@setOnClickListener
+                }
+                
+                // 替换ScrollView的内容
+                scrollView.removeAllViews()
+                val newContent = when (title) {
+                    "课外" -> createExploreContent(activity)
+                    "设置" -> createSettingsContent(activity, prefs)
+                    else -> createContentLayout(activity, prefs)
+                }
+                newContent.id = android.R.id.list
+                scrollView.addView(newContent)
+                
+                // 更新导航栏选中状态
+                updateNavigationSelection(activity, title)
             } catch (e: Exception) {
                 logToAll("Error switching page: ${e.message}")
                 e.printStackTrace()
@@ -1444,12 +1395,11 @@ class XposedHook : IXposedHookLoadPackage {
     private fun launchOriginalApp(activity: Activity, prefs: android.content.SharedPreferences) {
         logToAll("Launching original app")
         
-        prefs.edit()
-            .putBoolean(KEY_SHOW_ORIGINAL, true)
-            .putBoolean(KEY_UI_REPLACED, false)
-            .apply()
+        // 使用Intent extras传递标志，而不是SharedPreferences
+        val intent = Intent(activity.intent)
+        intent.putExtra("show_original_app", true)
+        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
         
-        val intent = activity.intent
         activity.finish()
         activity.startActivity(intent)
     }
