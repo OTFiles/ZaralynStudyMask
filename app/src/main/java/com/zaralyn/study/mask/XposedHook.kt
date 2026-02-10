@@ -31,10 +31,27 @@ class XposedHook : IXposedHookLoadPackage {
         private const val KEY_LAST_CLICK_TIME = "last_click_time"
         private const val KEY_UI_REPLACED = "ui_replaced"
         private const val KEY_MAIN_ACTIVITY = "main_activity"
+        private const val KEY_SELECTED_GRADE = "selected_grade"
+        
+        // 颜色系统
+        private const val COLOR_PRIMARY = "#1E88E5"      // 天蓝色
+        private const val COLOR_PRIMARY_CONTAINER = "#D1E4FF"  // 浅蓝色
+        private const val COLOR_SURFACE = "#FFFFFF"        // 白色
+        private const val COLOR_SURFACE_CONTAINER = "#F3F3F3"  // 浅灰
+        private const val COLOR_OUTLINE = "#74777F"        // 灰色
+        private const val COLOR_ON_SURFACE = "#1D1B20"     // 深灰
+        
+        // 课本数据
+        private val GRADE_10_BOOKS = listOf("必修一", "必修二", "英语语法", "词汇手册")
+        private val GRADE_11_BOOKS = listOf("必修三", "必修四", "阅读训练", "写作指南")
+        private val GRADE_12_BOOKS = listOf("必修五", "选修六", "高考真题", "冲刺复习")
     }
 
     private var mainActivityClass: String? = null
     private var packageName: String = ""
+    
+    // 当前选中的年级（10=高一, 11=高二, 12=高三）
+    private var currentGrade = 10
 
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
         val loadedPackageName = lpparam.packageName
@@ -621,6 +638,10 @@ class XposedHook : IXposedHookLoadPackage {
         logToAll("Replacing activity UI")
         
         try {
+            // 重置显示原应用的标志，确保每次启动都显示伪装界面
+            prefs.edit().putBoolean(KEY_SHOW_ORIGINAL, false).apply()
+            logToAll("Reset KEY_SHOW_ORIGINAL to false")
+            
             // 保存原视图
             val decorView = activity.window.decorView
             val contentView = decorView.findViewById<ViewGroup>(android.R.id.content)
@@ -648,14 +669,26 @@ class XposedHook : IXposedHookLoadPackage {
     private fun createMaskUI(activity: Activity, prefs: android.content.SharedPreferences): View {
         logToAll("Creating mask UI")
         
+        // 从SharedPreferences加载当前选中的年级
+        currentGrade = prefs.getInt(KEY_SELECTED_GRADE, 10)
+        logToAll("Loaded current grade: $currentGrade")
+        
         val rootLayout = LinearLayout(activity)
         rootLayout.orientation = LinearLayout.VERTICAL
+        rootLayout.setBackgroundColor(Color.parseColor(COLOR_SURFACE))
         
+        // 顶部应用栏
         val toolbar = createToolbar(activity)
-        rootLayout.addView(toolbar)
+        rootLayout.addView(toolbar, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            (72 * activity.resources.displayMetrics.density).toInt()
+        ))
         
+        // 可滚动内容区
         val scrollView = ScrollView(activity)
-        val contentLayout = createContentLayout(activity)
+        scrollView.setBackgroundColor(Color.parseColor(COLOR_SURFACE))
+        
+        val contentLayout = createContentLayout(activity, prefs)
         scrollView.addView(contentLayout)
         
         rootLayout.addView(scrollView, LinearLayout.LayoutParams(
@@ -664,8 +697,12 @@ class XposedHook : IXposedHookLoadPackage {
             1.0f
         ))
         
-        val bottomNav = createBottomNavigation(activity)
-        rootLayout.addView(bottomNav)
+        // 底部导航栏
+        val bottomNav = createBottomNavigation(activity, prefs)
+        rootLayout.addView(bottomNav, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            (56 * activity.resources.displayMetrics.density).toInt()
+        ))
         
         return rootLayout
     }
@@ -673,42 +710,65 @@ class XposedHook : IXposedHookLoadPackage {
     private fun createToolbar(activity: Activity): LinearLayout {
         val toolbar = LinearLayout(activity)
         toolbar.orientation = LinearLayout.HORIZONTAL
-        toolbar.setBackgroundColor(Color.parseColor("#1E88E5"))
-        toolbar.setPadding(16, 16, 16, 16)
+        toolbar.setBackgroundColor(Color.parseColor(COLOR_PRIMARY))
+        toolbar.gravity = android.view.Gravity.CENTER_VERTICAL
+        toolbar.setPadding(
+            (16 * activity.resources.displayMetrics.density).toInt(),
+            (16 * activity.resources.displayMetrics.density).toInt(),
+            (16 * activity.resources.displayMetrics.density).toInt(),
+            (16 * activity.resources.displayMetrics.density).toInt()
+        )
         
+        // 书本图标（使用文字替代）
+        val icon = TextView(activity)
+        icon.text = "[书]"
+        icon.setTextColor(Color.WHITE)
+        icon.textSize = 20f
+        icon.setPadding(0, 0, (12 * activity.resources.displayMetrics.density).toInt(), 0)
+        
+        // 标题
         val title = TextView(activity)
         title.text = "高中英语学习"
         title.setTextColor(Color.WHITE)
         title.textSize = 20f
         title.setTypeface(null, android.graphics.Typeface.BOLD)
-        
-        toolbar.addView(title, LinearLayout.LayoutParams(
+        title.layoutParams = LinearLayout.LayoutParams(
             0,
             LinearLayout.LayoutParams.WRAP_CONTENT,
             1.0f
-        ))
+        )
         
+        // 提示文字
         val hint = TextView(activity)
-        hint.text = "按 F10 或连击主页键 5 次"
+        hint.text = "按F10或连击主页键5次"
         hint.setTextColor(Color.parseColor("#BBDEFB"))
         hint.textSize = 12f
         
+        toolbar.addView(icon)
+        toolbar.addView(title)
         toolbar.addView(hint)
         
         return toolbar
     }
     
-    private fun createContentLayout(activity: Activity): LinearLayout {
+    private fun createContentLayout(activity: Activity, prefs: android.content.SharedPreferences): LinearLayout {
         val layout = LinearLayout(activity)
         layout.orientation = LinearLayout.VERTICAL
-        layout.setBackgroundColor(Color.WHITE)
-        layout.setPadding(16, 16, 16, 16)
+        layout.setBackgroundColor(Color.parseColor(COLOR_SURFACE))
+        layout.setPadding(
+            (16 * activity.resources.displayMetrics.density).toInt(),
+            (16 * activity.resources.displayMetrics.density).toInt(),
+            (16 * activity.resources.displayMetrics.density).toInt(),
+            (16 * activity.resources.displayMetrics.density).toInt()
+        )
         
+        // 年级选择区域
         layout.addView(createSectionTitle(activity, "选择年级"))
-        layout.addView(createGradeRow(activity))
+        layout.addView(createGradeRow(activity, prefs))
         
+        // 课本列表区域
         layout.addView(createSectionTitle(activity, "课本列表"))
-        layout.addView(createBookList(activity))
+        layout.addView(createBookList(activity, prefs))
         
         return layout
     }
@@ -722,105 +782,407 @@ class XposedHook : IXposedHookLoadPackage {
         return title
     }
     
-    private fun createGradeRow(activity: Activity): LinearLayout {
+    private fun createGradeRow(activity: Activity, prefs: android.content.SharedPreferences): LinearLayout {
         val row = LinearLayout(activity)
         row.orientation = LinearLayout.HORIZONTAL
+        row.gravity = android.view.Gravity.CENTER_VERTICAL
         
-        val grades = listOf("高一", "高二", "高三")
-        for (grade in grades) {
-            row.addView(createGradeCard(activity, grade))
+        val grades = listOf(Pair(10, "高一"), Pair(11, "高二"), Pair(12, "高三"))
+        for ((gradeLevel, gradeName) in grades) {
+            row.addView(createGradeCard(activity, gradeName, gradeLevel, prefs))
         }
         
         return row
     }
     
-    private fun createGradeCard(activity: Activity, gradeName: String): LinearLayout {
+    private fun createGradeCard(activity: Activity, gradeName: String, gradeLevel: Int, prefs: android.content.SharedPreferences): LinearLayout {
+        val dp = activity.resources.displayMetrics.density
+        val isSelected = currentGrade == gradeLevel
+        
         val card = LinearLayout(activity)
         card.orientation = LinearLayout.HORIZONTAL
-        card.setBackgroundColor(Color.parseColor("#D1E4FF"))
-        card.setPadding(16, 16, 16, 16)
+        card.gravity = android.view.Gravity.CENTER_VERTICAL
+        
+        // 设置背景色和边框
+        if (isSelected) {
+            card.setBackgroundColor(Color.parseColor(COLOR_PRIMARY_CONTAINER))
+            card.background = createBorderDrawable(activity, Color.parseColor(COLOR_PRIMARY), 2)
+        } else {
+            card.setBackgroundColor(Color.parseColor(COLOR_SURFACE_CONTAINER))
+            card.background = createBorderDrawable(activity, Color.parseColor(COLOR_OUTLINE), 1)
+        }
+        
+        card.setPadding(
+            (16 * dp).toInt(),
+            (16 * dp).toInt(),
+            (16 * dp).toInt(),
+            (16 * dp).toInt()
+        )
+        
         card.layoutParams = LinearLayout.LayoutParams(
             0,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
+            (60 * dp).toInt(),
             1.0f
         )
         
-        val icon = TextView(activity)
-        icon.text = "📚"
-        icon.textSize = 24f
+        card.setPadding(
+            (8 * dp).toInt(),
+            (8 * dp).toInt(),
+            (8 * dp).toInt(),
+            (8 * dp).toInt()
+        )
         
+        // 学校图标（使用文字替代）
+        val icon = TextView(activity)
+        icon.text = "[学]"
+        icon.textSize = 18f
+        if (isSelected) {
+            icon.setTextColor(Color.parseColor(COLOR_PRIMARY))
+        } else {
+            icon.setTextColor(Color.parseColor(COLOR_OUTLINE))
+        }
+        icon.setPadding(0, 0, (8 * dp).toInt(), 0)
+        
+        // 年级名称
         val name = TextView(activity)
         name.text = gradeName
         name.textSize = 16f
         name.setTypeface(null, android.graphics.Typeface.BOLD)
-        name.setPadding(16, 0, 0, 0)
+        if (isSelected) {
+            name.setTextColor(Color.parseColor(COLOR_PRIMARY))
+        } else {
+            name.setTextColor(Color.parseColor(COLOR_ON_SURFACE))
+        }
         
         card.addView(icon)
         card.addView(name)
         
+        // 添加点击事件
+        card.setOnClickListener {
+            logToAll("Grade clicked: $gradeName (Level: $gradeLevel)")
+            currentGrade = gradeLevel
+            prefs.edit().putInt(KEY_SELECTED_GRADE, gradeLevel).apply()
+            
+            // 刷新课本列表
+            val contentLayout = activity.findViewById<LinearLayout>(android.R.id.content)
+            val scrollView = contentLayout.getChildAt(0) as ScrollView
+            val rootLayout = scrollView.getChildAt(0) as LinearLayout
+            
+            // 找到课本列表并更新
+            for (i in 0 until rootLayout.childCount) {
+                val child = rootLayout.getChildAt(i)
+                if (child is TextView && child.text.toString() == "课本列表") {
+                    // 找到了课本列表标题，替换下一个子元素
+                    if (i + 1 < rootLayout.childCount) {
+                        val oldBookList = rootLayout.getChildAt(i + 1)
+                        rootLayout.removeView(oldBookList)
+                        rootLayout.addView(createBookList(activity, prefs), i + 1)
+                    }
+                    break
+                }
+            }
+            
+            // 刷新年级卡片状态
+            refreshGradeCards(activity, rootLayout, prefs)
+        }
+        
+        // 添加触摸反馈
+        card.setOnTouchListener { _, event ->
+            when (event.action) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    card.alpha = 0.8f
+                }
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                    card.alpha = 1.0f
+                }
+            }
+            false
+        }
+        
         return card
     }
     
-    private fun createBookList(activity: Activity): LinearLayout {
+    // 创建带边框的Drawable
+    private fun createBorderDrawable(activity: Activity, borderColor: Int, borderWidth: Int): android.graphics.drawable.GradientDrawable {
+        val drawable = android.graphics.drawable.GradientDrawable()
+        drawable.setStroke(borderWidth, borderColor)
+        drawable.cornerRadius = (16 * activity.resources.displayMetrics.density).toFloat()
+        return drawable
+    }
+    
+    // 刷新年级卡片状态
+    private fun refreshGradeCards(activity: Activity, rootLayout: LinearLayout, prefs: android.content.SharedPreferences) {
+        // 找到年级选择区域并刷新
+        for (i in 0 until rootLayout.childCount) {
+            val child = rootLayout.getChildAt(i)
+            if (child is TextView && child.text.toString() == "选择年级") {
+                if (i + 1 < rootLayout.childCount) {
+                    val oldGradeRow = rootLayout.getChildAt(i + 1)
+                    rootLayout.removeView(oldGradeRow)
+                    rootLayout.addView(createGradeRow(activity, prefs), i + 1)
+                }
+                break
+            }
+        }
+    }
+    
+    private fun createBookList(activity: Activity, prefs: android.content.SharedPreferences): LinearLayout {
         val list = LinearLayout(activity)
         list.orientation = LinearLayout.VERTICAL
         
-        val books = listOf("必修一", "必修二", "英语语法", "词汇手册")
-        for (book in books) {
-            list.addView(createBookCard(activity, book))
+        // 根据当前选中的年级获取课本列表
+        val books = when (currentGrade) {
+            11 -> GRADE_11_BOOKS
+            12 -> GRADE_12_BOOKS
+            else -> GRADE_10_BOOKS
+        }
+        
+        for ((index, bookName) in books.withIndex()) {
+            list.addView(createBookCard(activity, bookName, index))
         }
         
         return list
     }
     
-    private fun createBookCard(activity: Activity, bookName: String): LinearLayout {
+    private fun createBookCard(activity: Activity, bookName: String, index: Int): LinearLayout {
+        val dp = activity.resources.displayMetrics.density
+        
         val card = LinearLayout(activity)
         card.orientation = LinearLayout.VERTICAL
-        card.setBackgroundColor(Color.parseColor("#F3F3F3"))
-        card.setPadding(16, 16, 16, 16)
-        card.layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
+        card.setBackgroundColor(Color.parseColor(COLOR_SURFACE_CONTAINER))
+        
+        val drawable = createBorderDrawable(activity, Color.TRANSPARENT, 0)
+        card.background = drawable
+        card.setPadding(
+            (16 * dp).toInt(),
+            (16 * dp).toInt(),
+            (16 * dp).toInt(),
+            (16 * dp).toInt()
         )
         
-        val name = TextView(activity)
-        name.text = bookName
-        name.textSize = 16f
-        name.setTypeface(null, android.graphics.Typeface.BOLD)
+        card.layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            (120 * dp).toInt()
+        )
         
+        // 添加边距
+        val cardParams = card.layoutParams as LinearLayout.LayoutParams
+        cardParams.setMargins(0, 0, 0, (8 * dp).toInt())
+        card.layoutParams = cardParams
+        
+        // 顶部内容行
+        val topRow = LinearLayout(activity)
+        topRow.orientation = LinearLayout.HORIZONTAL
+        topRow.gravity = android.view.Gravity.CENTER_VERTICAL
+        
+        // 书本图标背景
+        val iconBg = TextView(activity)
+        iconBg.text = "[书]"
+        iconBg.textSize = 20f
+        iconBg.setTextColor(Color.WHITE)
+        iconBg.setBackgroundColor(Color.parseColor(COLOR_PRIMARY))
+        iconBg.gravity = android.view.Gravity.CENTER
+        iconBg.setPadding(
+            (12 * dp).toInt(),
+            (12 * dp).toInt(),
+            (12 * dp).toInt(),
+            (12 * dp).toInt()
+        )
+        
+        val iconParams = LinearLayout.LayoutParams(
+            (48 * dp).toInt(),
+            (48 * dp).toInt()
+        )
+        iconBg.layoutParams = iconParams
+        
+        val iconDrawable = android.graphics.drawable.GradientDrawable()
+        iconDrawable.cornerRadius = (12 * dp).toFloat()
+        iconDrawable.setColor(Color.parseColor(COLOR_PRIMARY))
+        iconBg.background = iconDrawable
+        
+        // 课本标题和描述
+        val textLayout = LinearLayout(activity)
+        textLayout.orientation = LinearLayout.VERTICAL
+        textLayout.setPadding((12 * dp).toInt(), 0, 0, 0)
+        textLayout.layoutParams = LinearLayout.LayoutParams(
+            0,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            1.0f
+        )
+        
+        val title = TextView(activity)
+        title.text = bookName
+        title.textSize = 16f
+        title.setTypeface(null, android.graphics.Typeface.BOLD)
+        title.setTextColor(Color.parseColor(COLOR_ON_SURFACE))
+        
+        val subtitle = TextView(activity)
+        subtitle.text = "Grade $currentGrade"
+        subtitle.textSize = 14f
+        subtitle.setTextColor(Color.parseColor(COLOR_OUTLINE))
+        subtitle.setPadding(0, (4 * dp).toInt(), 0, 0)
+        
+        textLayout.addView(title)
+        textLayout.addView(subtitle)
+        
+        topRow.addView(iconBg)
+        topRow.addView(textLayout)
+        
+        // 文件名
         val filename = TextView(activity)
-        filename.text = "compulsory_1.md"
-        filename.setTextColor(Color.parseColor("#74777F"))
+        filename.text = "compulsory_${index + 1}.md"
         filename.textSize = 12f
-        filename.setPadding(0, 8, 0, 0)
+        filename.setTextColor(Color.parseColor(COLOR_OUTLINE))
+        filename.setTypeface(android.graphics.Typeface.MONOSPACE)
+        filename.setPadding(0, (8 * dp).toInt(), 0, 0)
         
-        card.addView(name)
+        card.addView(topRow)
         card.addView(filename)
+        
+        // 添加点击事件 - 打开ReaderActivity
+        card.setOnClickListener {
+            logToAll("Book clicked: $bookName")
+            openReaderActivity(activity, bookName, index)
+        }
+        
+        // 添加触摸反馈
+        card.setOnTouchListener { _, event ->
+            when (event.action) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    card.alpha = 0.8f
+                    card.translationY = (-2 * dp).toFloat()
+                }
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                    card.alpha = 1.0f
+                    card.translationY = 0f
+                }
+            }
+            false
+        }
         
         return card
     }
     
-    private fun createBottomNavigation(activity: Activity): LinearLayout {
+    // 打开ReaderActivity
+    private fun openReaderActivity(activity: Activity, bookName: String, index: Int) {
+        logToAll("Opening ReaderActivity for: $bookName")
+        
+        try {
+            val intent = Intent()
+            intent.setClassName(activity, "com.zaralyn.study.mask.ReaderActivity")
+            intent.putExtra("bookName", bookName)
+            intent.putExtra("fileName", "compulsory_${index + 1}.md")
+            activity.startActivity(intent)
+        } catch (e: Exception) {
+            logToAll("Failed to open ReaderActivity: ${e.message}")
+            e.printStackTrace()
+            
+            // 如果ReaderActivity不存在，显示Toast提示
+            try {
+                android.widget.Toast.makeText(activity, "阅读功能开发中", android.widget.Toast.LENGTH_SHORT).show()
+            } catch (e2: Exception) {
+                // 忽略Toast错误
+            }
+        }
+    }
+    
+    private fun createBottomNavigation(activity: Activity, prefs: android.content.SharedPreferences): LinearLayout {
         val nav = LinearLayout(activity)
         nav.orientation = LinearLayout.HORIZONTAL
-        nav.setBackgroundColor(Color.parseColor("#D1E4FF"))
+        nav.setBackgroundColor(Color.parseColor(COLOR_SURFACE))
         
-        val items = listOf("主页", "课外", "设置")
-        for (item in items) {
-            val navItem = TextView(activity)
-            navItem.text = item
-            navItem.gravity = android.view.Gravity.CENTER
-            navItem.setPadding(0, 16, 0, 16)
-            navItem.layoutParams = LinearLayout.LayoutParams(
-                0,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                1.0f
-            )
-            
-            nav.addView(navItem)
+        val items = listOf(
+            Triple("主页", "[主]", true),
+            Triple("课外", "[外]", false),
+            Triple("设置", "[设]", false)
+        )
+        
+        for ((index, item) in items.withIndex()) {
+            val (title, icon, isSelected) = item
+            nav.addView(createNavItem(activity, title, icon, isSelected))
         }
         
         return nav
+    }
+    
+    private fun createNavItem(activity: Activity, title: String, icon: String, isSelected: Boolean): LinearLayout {
+        val dp = activity.resources.displayMetrics.density
+        
+        val navItem = LinearLayout(activity)
+        navItem.orientation = LinearLayout.VERTICAL
+        navItem.gravity = android.view.Gravity.CENTER
+        
+        // 选中状态背景
+        if (isSelected) {
+            navItem.setBackgroundColor(Color.parseColor(COLOR_PRIMARY_CONTAINER))
+        } else {
+            navItem.setBackgroundColor(Color.TRANSPARENT)
+        }
+        
+        navItem.setPadding(
+            (16 * dp).toInt(),
+            (8 * dp).toInt(),
+            (16 * dp).toInt(),
+            (8 * dp).toInt()
+        )
+        
+        navItem.layoutParams = LinearLayout.LayoutParams(
+            0,
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            1.0f
+        )
+        
+        // 图标
+        val iconText = TextView(activity)
+        iconText.text = icon
+        iconText.textSize = 20f
+        if (isSelected) {
+            iconText.setTextColor(Color.parseColor(COLOR_PRIMARY))
+        } else {
+            iconText.setTextColor(Color.parseColor(COLOR_OUTLINE))
+        }
+        iconText.gravity = android.view.Gravity.CENTER
+        
+        // 标题
+        val titleText = TextView(activity)
+        titleText.text = title
+        titleText.textSize = 12f
+        if (isSelected) {
+            titleText.setTextColor(Color.parseColor(COLOR_PRIMARY))
+        } else {
+            titleText.setTextColor(Color.parseColor(COLOR_OUTLINE))
+        }
+        titleText.gravity = android.view.Gravity.CENTER
+        titleText.setPadding(0, (4 * dp).toInt(), 0, 0)
+        
+        navItem.addView(iconText)
+        navItem.addView(titleText)
+        
+        // 添加点击事件
+        navItem.setOnClickListener {
+            logToAll("Navigation clicked: $title")
+            // TODO: 实现页面切换
+            try {
+                android.widget.Toast.makeText(activity, "$title 功能开发中", android.widget.Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                // 忽略Toast错误
+            }
+        }
+        
+        // 添加触摸反馈
+        navItem.setOnTouchListener { _, event ->
+            when (event.action) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    navItem.alpha = 0.7f
+                }
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                    navItem.alpha = 1.0f
+                }
+            }
+            false
+        }
+        
+        return navItem
     }
     
     // 设置按键监听
