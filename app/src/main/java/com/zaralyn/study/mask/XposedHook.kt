@@ -31,13 +31,23 @@ class XposedHook : IXposedHookLoadPackage {
         private const val KEY_LAST_CLICK_TIME = "last_click_time"
         private const val KEY_UI_REPLACED = "ui_replaced"
         private const val KEY_MAIN_ACTIVITY = "main_activity"
+        
+        // 目标应用包名，从 patch.json 中获取
+        private const val TARGET_PACKAGE = "com.target.app"
     }
 
     private var mainActivityClass: String? = null
     private var packageName: String = ""
 
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
-        packageName = lpparam.packageName
+        val loadedPackageName = lpparam.packageName
+        
+        // 只处理目标包
+        if (loadedPackageName != TARGET_PACKAGE) {
+            return
+        }
+        
+        packageName = loadedPackageName
 
         logToAll("========== ZaralynStudyMask: Loading hook for $packageName ==========")
 
@@ -289,6 +299,8 @@ class XposedHook : IXposedHookLoadPackage {
     private fun hookDecorView(classLoader: ClassLoader) {
         try {
             val attachInfoClass = XposedHelpers.findClass("android.view.View\$AttachInfo", classLoader)
+            // 提前查找 DecorView 类，使用类对象检查而不是字符串比较
+            val decorViewClass = XposedHelpers.findClass("com.android.internal.policy.DecorView", classLoader)
             
             XposedHelpers.findAndHookMethod(
                 "android.view.View",
@@ -301,8 +313,8 @@ class XposedHook : IXposedHookLoadPackage {
                         try {
                             val view = param.thisObject
                             
-                            // 检查是否是 DecorView
-                            if (view.javaClass.name != "com.android.internal.policy.DecorView") {
+                            // 检查是否是 DecorView，使用类对象的 isInstance 方法
+                            if (!decorViewClass.isInstance(view)) {
                                 return
                             }
                             
