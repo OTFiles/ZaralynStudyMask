@@ -1,41 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:id="@+id/gradeCard"
-    android:layout_width="wrap_content"
-    android:layout_height="@dimen/grade_card_height"
-    android:layout_marginEnd="@dimen/margin_small"
-    android:clickable="true"
-    android:focusable="true"
-    app:cardCornerRadius="8dp"
-    app:cardElevation="2dp">
+<layout xmlns:android="http://schemas.android.com/apk/res/android">
 
     <LinearLayout
-        android:id="@+id/gradeCardContent"
         android:layout_width="wrap_content"
-        android:layout_height="match_parent"
-        android:background="@color/gray_light"
-        android:gravity="center"
-        android:orientation="horizontal"
-        android:paddingStart="@dimen/margin_medium"
-        android:paddingEnd="@dimen/margin_large">
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="@dimen/margin_small"
+        android:orientation="vertical">
 
-        <ImageView
-            android:id="@+id/gradeIcon"
-            android:layout_width="@dimen/icon_size_medium"
-            android:layout_height="@dimen/icon_size_medium"
-            android:layout_marginEnd="@dimen/margin_small"
-            android:src="@drawable/ic_school"
-            app:tint="@color/md_theme_primary" />
+        <androidx.cardview.widget.CardView
+            android:id="@+id/cardView"
+            android:layout_width="@dimen/grade_card_width"
+            android:layout_height="@dimen/grade_card_height"
+            android:clickable="true"
+            android:focusable="true"
+            app:cardBackgroundColor="@color/md_theme_surfaceContainer"
+            app:cardCornerRadius="@dimen/card_radius"
+            app:cardElevation="4dp">
 
-        <TextView
-            android:id="@+id/gradeName"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="@color/text_primary"
-            android:textSize="16sp"
-            android:textStyle="bold" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:padding="@dimen/margin_small">
+
+                <ImageView
+                    android:id="@+id/gradeIcon"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_marginEnd="@dimen/margin_small"
+                    android:src="@drawable/ic_school"
+                    app:tint="@color/md_theme_primary" />
+
+                <TextView
+                    android:id="@+id/gradeName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/text_primary"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+            </LinearLayout>
+
+        </androidx.cardview.widget.CardView>
 
     </LinearLayout>
 
-</com.google.android.material.card.MaterialCardView>
+</layout>
