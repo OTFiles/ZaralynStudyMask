@@ -1150,13 +1150,13 @@ class XposedHook : IXposedHookLoadPackage {
         
         for ((index, item) in items.withIndex()) {
             val (title, icon, isSelected) = item
-            nav.addView(createNavItem(activity, title, icon, isSelected))
+            nav.addView(createNavItem(activity, title, icon, isSelected, prefs))
         }
         
         return nav
     }
     
-    private fun createNavItem(activity: Activity, title: String, icon: String, isSelected: Boolean): LinearLayout {
+    private fun createNavItem(activity: Activity, title: String, icon: String, isSelected: Boolean, prefs: android.content.SharedPreferences): LinearLayout {
         val dp = activity.resources.displayMetrics.density
         
         val navItem = LinearLayout(activity)
@@ -1278,12 +1278,12 @@ class XposedHook : IXposedHookLoadPackage {
                                 // 选中状态
                                 navItem.setBackgroundColor(Color.parseColor(COLOR_PRIMARY_CONTAINER))
                                 (navItem.getChildAt(0) as? TextView)?.setTextColor(Color.parseColor(COLOR_PRIMARY))
-                                titleText.setTextColor(Color.parseColor(COLOR_PRIMARY))
+                                titleText?.setTextColor(Color.parseColor(COLOR_PRIMARY))
                             } else {
                                 // 未选中状态
                                 navItem.setBackgroundColor(Color.TRANSPARENT)
                                 (navItem.getChildAt(0) as? TextView)?.setTextColor(Color.parseColor(COLOR_OUTLINE))
-                                titleText.setTextColor(Color.parseColor(COLOR_OUTLINE))
+                                titleText?.setTextColor(Color.parseColor(COLOR_OUTLINE))
                             }
                         }
                     }
