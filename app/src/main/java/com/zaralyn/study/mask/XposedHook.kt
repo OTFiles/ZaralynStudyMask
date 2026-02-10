@@ -4,8 +4,6 @@ import android.content.Context
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
-import android.widget.FrameLayout
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -22,6 +20,7 @@ class XposedHook : IXposedHookLoadPackage {
         private const val KEY_SHOW_ORIGINAL = "show_original_app"
         private const val KEY_CLICK_COUNT = "home_click_count"
         private const val KEY_LAST_CLICK_TIME = "last_click_time"
+        private const val KEY_UI_REPLACED = "ui_replaced"
     }
 
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
@@ -30,18 +29,18 @@ class XposedHook : IXposedHookLoadPackage {
         XposedBridge.log("ZaralynStudyMask: Loading hook for $packageName")
 
         try {
-            // Hook 目标应用包名的 Activity.onCreate
+            // Hook setContentView 方法，阻止原 Activity 设置 UI
             XposedHelpers.findAndHookMethod(
                 android.app.Activity::class.java.name,
                 lpparam.classLoader,
-                "onCreate",
-                android.os.Bundle::class.java,
+                "setContentView",
+                Int::class.javaPrimitiveType,
                 object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
                         val activity = param.thisObject as android.app.Activity
                         val activityClassName = activity.javaClass.name
 
-                        XposedBridge.log("ZaralynStudyMask: Activity onCreate - $activityClassName")
+                        XposedBridge.log("ZaralynStudyMask: setContentView called for $activityClassName")
 
                         // 只处理 MainActivity
                         if (!activityClassName.endsWith(".MainActivity")) {
@@ -51,17 +50,102 @@ class XposedHook : IXposedHookLoadPackage {
                         // 检查是否应该显示原应用
                         val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                         val showOriginal = prefs.getBoolean(KEY_SHOW_ORIGINAL, false)
+                        val uiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
 
                         if (showOriginal) {
-                            // 显示原应用，不做任何修改
                             XposedBridge.log("ZaralynStudyMask: Showing original app")
                             return
                         }
 
-                        XposedBridge.log("ZaralynStudyMask: Replacing MainActivity UI with study mask")
+                        if (uiReplaced) {
+                            // UI 已经被替换过了，不再重复
+                            return
+                        }
 
-                        // 替换 Activity 的 UI
-                        replaceActivityUI(activity, prefs)
+                        XposedBridge.log("ZaralynStudyMask: Replacing UI for MainActivity")
+
+                        // 标记 UI 已被替换
+                        prefs.edit().putBoolean(KEY_UI_REPLACED, true).apply()
+
+                        // 创建并设置伪装界面的 UI
+                        val newUI = createMaskUI(activity, prefs)
+                        activity.setContentView(newUI)
+
+                        // 取消原来的 setContentView 调用
+                        param.setResult(null)
+                    }
+                }
+            )
+
+            // Hook setContentView 方法（View 参数版本）
+            XposedHelpers.findAndHookMethod(
+                android.app.Activity::class.java.name,
+                lpparam.classLoader,
+                "setContentView",
+                android.view.View::class.java,
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        val activity = param.thisObject as android.app.Activity
+                        val activityClassName = activity.javaClass.name
+
+                        XposedBridge.log("ZaralynStudyMask: setContentView(View) called for $activityClassName")
+
+                        // 只处理 MainActivity
+                        if (!activityClassName.endsWith(".MainActivity")) {
+                            return
+                        }
+
+                        // 检查是否应该显示原应用
+                        val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                        val showOriginal = prefs.getBoolean(KEY_SHOW_ORIGINAL, false)
+                        val uiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
+
+                        if (showOriginal || uiReplaced) {
+                            return
+                        }
+
+                        XposedBridge.log("ZaralynStudyMask: Replacing UI for MainActivity (View version)")
+
+                        // 标记 UI 已被替换
+                        prefs.edit().putBoolean(KEY_UI_REPLACED, true).apply()
+
+                        // 创建并设置伪装界面的 UI
+                        val newUI = createMaskUI(activity, prefs)
+                        activity.setContentView(newUI)
+
+                        // 取消原来的 setContentView 调用
+                        param.setResult(null)
+                    }
+                }
+            )
+
+            // Hook Activity.onWindowFocusChanged 来处理按键事件
+            XposedHelpers.findAndHookMethod(
+                android.app.Activity::class.java.name,
+                lpparam.classLoader,
+                "onWindowFocusChanged",
+                Boolean::class.javaPrimitiveType,
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val activity = param.thisObject as android.app.Activity
+                        val activityClassName = activity.javaClass.name
+
+                        // 只处理 MainActivity
+                        if (!activityClassName.endsWith(".MainActivity")) {
+                            return
+                        }
+
+                        // 检查是否应该显示原应用
+                        val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                        val showOriginal = prefs.getBoolean(KEY_SHOW_ORIGINAL, false)
+                        val uiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
+
+                        if (showOriginal || !uiReplaced) {
+                            return
+                        }
+
+                        // 设置按键监听
+                        setupKeyListener(activity, prefs)
                     }
                 }
             )
@@ -71,27 +155,19 @@ class XposedHook : IXposedHookLoadPackage {
         }
     }
 
-    private fun replaceActivityUI(activity: android.app.Activity, prefs: android.content.SharedPreferences) {
-        // 创建伪装界面的根布局
+    private fun createMaskUI(activity: android.app.Activity, prefs: android.content.SharedPreferences): View {
+        // 创建根布局
         val rootLayout = LinearLayout(activity)
         rootLayout.orientation = LinearLayout.VERTICAL
-        rootLayout.setBackgroundColor(Color.parseColor("#1E88E5"))
         
         // 创建工具栏
-        val toolbar = createToolbar(activity, prefs)
+        val toolbar = createToolbar(activity)
         rootLayout.addView(toolbar)
         
         // 创建内容区域
-        val contentLayout = LinearLayout(activity)
-        contentLayout.orientation = LinearLayout.VERTICAL
-        contentLayout.setBackgroundColor(Color.parseColor("#FFFFFF"))
-        
         val scrollView = ScrollView(activity)
+        val contentLayout = createContentLayout(activity)
         scrollView.addView(contentLayout)
-        
-        // 添加内容
-        contentLayout.addView(createGradeSection(activity))
-        contentLayout.addView(createBookSection(activity))
         
         rootLayout.addView(scrollView, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
@@ -103,14 +179,10 @@ class XposedHook : IXposedHookLoadPackage {
         val bottomNav = createBottomNavigation(activity)
         rootLayout.addView(bottomNav)
         
-        // 设置为 Activity 的内容视图
-        activity.setContentView(rootLayout)
-        
-        // 处理按键事件
-        handleKeyPresses(activity, prefs)
+        return rootLayout
     }
     
-    private fun createToolbar(activity: android.app.Activity, prefs: android.content.SharedPreferences): LinearLayout {
+    private fun createToolbar(activity: android.app.Activity): LinearLayout {
         val toolbar = LinearLayout(activity)
         toolbar.orientation = LinearLayout.HORIZONTAL
         toolbar.setBackgroundColor(Color.parseColor("#1E88E5"))
@@ -128,9 +200,8 @@ class XposedHook : IXposedHookLoadPackage {
             1.0f
         ))
         
-        // 添加隐藏入口提示
         val hint = TextView(activity)
-        hint.text = "按 F10 或连击主页键 5 次进入原应用"
+        hint.text = "按 F10 或连击主页键 5 次"
         hint.setTextColor(Color.parseColor("#BBDEFB"))
         hint.textSize = 12f
         
@@ -139,31 +210,42 @@ class XposedHook : IXposedHookLoadPackage {
         return toolbar
     }
     
-    private fun createGradeSection(activity: android.app.Activity): LinearLayout {
-        val section = LinearLayout(activity)
-        section.orientation = LinearLayout.VERTICAL
-        section.setPadding(16, 16, 16, 16)
+    private fun createContentLayout(activity: android.app.Activity): LinearLayout {
+        val layout = LinearLayout(activity)
+        layout.orientation = LinearLayout.VERTICAL
+        layout.setBackgroundColor(Color.WHITE)
+        layout.setPadding(16, 16, 16, 16)
         
+        // 年级选择
+        layout.addView(createSectionTitle(activity, "选择年级"))
+        layout.addView(createGradeRow(activity))
+        
+        // 课本列表
+        layout.addView(createSectionTitle(activity, "课本列表"))
+        layout.addView(createBookList(activity))
+        
+        return layout
+    }
+    
+    private fun createSectionTitle(activity: android.app.Activity, text: String): TextView {
         val title = TextView(activity)
-        title.text = "选择年级"
+        title.text = text
         title.textSize = 18f
         title.setTypeface(null, android.graphics.Typeface.BOLD)
         title.setPadding(0, 0, 0, 8)
-        
-        section.addView(title)
-        
-        val gradesLayout = LinearLayout(activity)
-        gradesLayout.orientation = LinearLayout.HORIZONTAL
+        return title
+    }
+    
+    private fun createGradeRow(activity: android.app.Activity): LinearLayout {
+        val row = LinearLayout(activity)
+        row.orientation = LinearLayout.HORIZONTAL
         
         val grades = listOf("高一", "高二", "高三")
         for (grade in grades) {
-            val gradeCard = createGradeCard(activity, grade)
-            gradesLayout.addView(gradeCard)
+            row.addView(createGradeCard(activity, grade))
         }
         
-        section.addView(gradesLayout)
-        
-        return section
+        return row
     }
     
     private fun createGradeCard(activity: android.app.Activity, gradeName: String): LinearLayout {
@@ -193,25 +275,16 @@ class XposedHook : IXposedHookLoadPackage {
         return card
     }
     
-    private fun createBookSection(activity: android.app.Activity): LinearLayout {
-        val section = LinearLayout(activity)
-        section.orientation = LinearLayout.VERTICAL
-        section.setPadding(16, 16, 16, 16)
-        
-        val title = TextView(activity)
-        title.text = "课本列表"
-        title.textSize = 18f
-        title.setTypeface(null, android.graphics.Typeface.BOLD)
-        title.setPadding(0, 0, 0, 8)
-        
-        section.addView(title)
+    private fun createBookList(activity: android.app.Activity): LinearLayout {
+        val list = LinearLayout(activity)
+        list.orientation = LinearLayout.VERTICAL
         
         val books = listOf("必修一", "必修二", "英语语法", "词汇手册")
         for (book in books) {
-            section.addView(createBookCard(activity, book))
+            list.addView(createBookCard(activity, book))
         }
         
-        return section
+        return list
     }
     
     private fun createBookCard(activity: android.app.Activity, bookName: String): LinearLayout {
@@ -264,9 +337,8 @@ class XposedHook : IXposedHookLoadPackage {
         return nav
     }
     
-    private fun handleKeyPresses(activity: android.app.Activity, prefs: android.content.SharedPreferences) {
-        val window = activity.window
-        val decorView = window.decorView
+    private fun setupKeyListener(activity: android.app.Activity, prefs: android.content.SharedPreferences) {
+        val decorView = activity.window.decorView
         
         // 设置按键监听
         decorView.setOnKeyListener { _, keyCode, event ->
@@ -311,7 +383,10 @@ class XposedHook : IXposedHookLoadPackage {
         XposedBridge.log("ZaralynStudyMask: Launching original app")
         
         // 设置标志，让 XposedHook 知道应该显示原应用
-        prefs.edit().putBoolean(KEY_SHOW_ORIGINAL, true).apply()
+        prefs.edit()
+            .putBoolean(KEY_SHOW_ORIGINAL, true)
+            .putBoolean(KEY_UI_REPLACED, false)
+            .apply()
         
         // 重新启动 Activity
         val intent = activity.intent
