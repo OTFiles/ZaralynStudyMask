@@ -89,13 +89,6 @@ app/
 └── build.gradle
 ```
 
-## 注意事项
-
-1. 当前在 termux 环境无法进行编译操作
-2. 编译全部使用 GitHub Actions
-3. Zara 是一个 NPatch 模块，而不是一个完整的 APK
-4. 需要配置正确的目标应用包名才能正常工作
-
 ## 许可证
 
 MIT License
