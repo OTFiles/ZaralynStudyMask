@@ -155,19 +155,25 @@ class XposedHook : IXposedHookLoadPackage {
                             
                             val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                             
-                            // 重置 showOriginal 标志，确保每次启动都显示伪装界面
-                            // 这修复了第二次进入直接显示原app的问题
+                            // 重置所有标志，确保每次启动都显示伪装界面
                             val showOriginal = prefs.getBoolean(KEY_SHOW_ORIGINAL, false)
+                            val uiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
+                            
                             if (showOriginal) {
                                 logToAll("Resetting KEY_SHOW_ORIGINAL from true to false")
                                 prefs.edit().putBoolean(KEY_SHOW_ORIGINAL, false).apply()
                             }
                             
+                            if (uiReplaced) {
+                                logToAll("Resetting KEY_UI_REPLACED from true to false")
+                                prefs.edit().putBoolean(KEY_UI_REPLACED, false).apply()
+                            }
+                            
                             logToAll("Replacing UI via ActivityThread hook")
                             
                             // 检查是否已经替换过，避免重复替换
-                            val uiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
-                            if (!uiReplaced) {
+                            val currentUiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
+                            if (!currentUiReplaced) {
                                 activity.window.decorView.post {
                                     try {
                                         replaceActivityUI(activity, prefs)
@@ -235,18 +241,25 @@ class XposedHook : IXposedHookLoadPackage {
                                 
                                 val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                                 
-                                // 重置 showOriginal 标志，确保每次启动都显示伪装界面
+                                // 重置所有标志，确保每次启动都显示伪装界面
                                 val showOriginal = prefs.getBoolean(KEY_SHOW_ORIGINAL, false)
+                                val uiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
+                                
                                 if (showOriginal) {
                                     logToAll("Resetting KEY_SHOW_ORIGINAL from true to false")
                                     prefs.edit().putBoolean(KEY_SHOW_ORIGINAL, false).apply()
                                 }
                                 
+                                if (uiReplaced) {
+                                    logToAll("Resetting KEY_UI_REPLACED from true to false")
+                                    prefs.edit().putBoolean(KEY_UI_REPLACED, false).apply()
+                                }
+                                
                                 logToAll("Replacing UI via ActivityThread hook")
                                 
                                 // 检查是否已经替换过，避免重复替换
-                                val uiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
-                                if (!uiReplaced) {
+                                val currentUiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
+                                if (!currentUiReplaced) {
                                     activity.window.decorView.post {
                                         try {
                                             replaceActivityUI(activity, prefs)
@@ -741,15 +754,8 @@ class XposedHook : IXposedHookLoadPackage {
             1.0f
         )
         
-        // 提示文字
-        val hint = TextView(activity)
-        hint.text = "按F10或连击主页键5次"
-        hint.setTextColor(Color.parseColor("#BBDEFB"))
-        hint.textSize = 12f
-        
         toolbar.addView(icon)
         toolbar.addView(title)
-        toolbar.addView(hint)
         
         return toolbar
     }
@@ -1115,8 +1121,8 @@ class XposedHook : IXposedHookLoadPackage {
         try {
             val intent = Intent()
             intent.setClassName(activity, "com.zaralyn.study.mask.ReaderActivity")
-            intent.putExtra("bookName", bookName)
-            intent.putExtra("fileName", "compulsory_${index + 1}.md")
+            intent.putExtra("extra_book_title", bookName)
+            intent.putExtra("extra_book_file_name", "compulsory_${index + 1}.md")
             activity.startActivity(intent)
         } catch (e: Exception) {
             logToAll("Failed to open ReaderActivity: ${e.message}")
@@ -1206,11 +1212,36 @@ class XposedHook : IXposedHookLoadPackage {
         // 添加点击事件
         navItem.setOnClickListener {
             logToAll("Navigation clicked: $title")
-            // TODO: 实现页面切换
+            
             try {
-                android.widget.Toast.makeText(activity, "$title 功能开发中", android.widget.Toast.LENGTH_SHORT).show()
+                // 找到ScrollView并替换内容
+                val contentView = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
+                if (contentView != null && contentView.childCount > 0) {
+                    val firstChild = contentView.getChildAt(0)
+                    if (firstChild is LinearLayout) {
+                        // 找到ScrollView（第二个子元素）
+                        for (i in 0 until firstChild.childCount) {
+                            val child = firstChild.getChildAt(i)
+                            if (child is ScrollView) {
+                                // 替换ScrollView的内容
+                                child.removeAllViews()
+                                val newContent = when (title) {
+                                    "课外" -> createExploreContent(activity)
+                                    "设置" -> createSettingsContent(activity, prefs)
+                                    else -> createContentLayout(activity, prefs)
+                                }
+                                child.addView(newContent)
+                                break
+                            }
+                        }
+                        
+                        // 更新导航栏选中状态
+                        updateNavigationSelection(activity, title)
+                    }
+                }
             } catch (e: Exception) {
-                // 忽略Toast错误
+                logToAll("Error switching page: ${e.message}")
+                e.printStackTrace()
             }
         }
         
@@ -1230,46 +1261,98 @@ class XposedHook : IXposedHookLoadPackage {
         return navItem
     }
     
-    // 设置按键监听
-    private fun setupKeyListener(activity: Activity, prefs: android.content.SharedPreferences) {
-        val decorView = activity.window.decorView
-        
-        decorView.setOnKeyListener { _, keyCode, event ->
-            if (event.action == android.view.KeyEvent.ACTION_DOWN) {
-                if (keyCode == android.view.KeyEvent.KEYCODE_F10 || 
-                    keyCode == android.view.KeyEvent.KEYCODE_MENU) {
-                    logToAll("F10/MENU key pressed")
-                    launchOriginalApp(activity, prefs)
-                    return@setOnKeyListener true
-                }
-                
-                if (keyCode == android.view.KeyEvent.KEYCODE_HOME) {
-                    val currentTime = System.currentTimeMillis()
-                    val lastClickTime = prefs.getLong(KEY_LAST_CLICK_TIME, 0)
-                    val clickCount = prefs.getInt(KEY_CLICK_COUNT, 0)
-                    
-                    if (currentTime - lastClickTime < 2000) {
-                        val newClickCount = clickCount + 1
-                        prefs.edit()
-                            .putInt(KEY_CLICK_COUNT, newClickCount)
-                            .putLong(KEY_LAST_CLICK_TIME, currentTime)
-                            .apply()
-                        
-                        logToAll("Home click count: $newClickCount")
-                        
-                        if (newClickCount >= 5) {
-                            launchOriginalApp(activity, prefs)
-                            prefs.edit().putInt(KEY_CLICK_COUNT, 0).apply()
+    // 更新导航栏选中状态
+    private fun updateNavigationSelection(activity: Activity, selectedTitle: String) {
+        val contentView = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
+        if (contentView != null && contentView.childCount > 0) {
+            val firstChild = contentView.getChildAt(0)
+            if (firstChild is LinearLayout) {
+                // 找到底部导航栏（最后一个子元素）
+                val navBar = firstChild.getChildAt(firstChild.childCount - 1)
+                if (navBar is LinearLayout) {
+                    for (i in 0 until navBar.childCount) {
+                        val navItem = navBar.getChildAt(i)
+                        if (navItem is LinearLayout && navItem.childCount >= 2) {
+                            val titleText = navItem.getChildAt(1) as? TextView
+                            if (titleText?.text == selectedTitle) {
+                                // 选中状态
+                                navItem.setBackgroundColor(Color.parseColor(COLOR_PRIMARY_CONTAINER))
+                                (navItem.getChildAt(0) as? TextView)?.setTextColor(Color.parseColor(COLOR_PRIMARY))
+                                titleText.setTextColor(Color.parseColor(COLOR_PRIMARY))
+                            } else {
+                                // 未选中状态
+                                navItem.setBackgroundColor(Color.TRANSPARENT)
+                                (navItem.getChildAt(0) as? TextView)?.setTextColor(Color.parseColor(COLOR_OUTLINE))
+                                titleText.setTextColor(Color.parseColor(COLOR_OUTLINE))
+                            }
                         }
-                    } else {
-                        prefs.edit()
-                            .putInt(KEY_CLICK_COUNT, 1)
-                            .putLong(KEY_LAST_CLICK_TIME, currentTime)
-                            .apply()
                     }
                 }
             }
-            false
+        }
+    }
+    
+    // 设置按键监听
+    private fun setupKeyListener(activity: Activity, prefs: android.content.SharedPreferences) {
+        try {
+            // 使用反射获取Activity的dispatchKeyEvent方法并Hook
+            val activityClass = activity.javaClass
+            
+            XposedHelpers.findAndHookMethod(
+                activityClass,
+                "dispatchKeyEvent",
+                android.view.KeyEvent::class.java,
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val event = param.args[0] as android.view.KeyEvent
+                        
+                        if (event.action == android.view.KeyEvent.ACTION_DOWN) {
+                            val keyCode = event.keyCode
+                            
+                            if (keyCode == android.view.KeyEvent.KEYCODE_F10 || 
+                                keyCode == android.view.KeyEvent.KEYCODE_MENU) {
+                                logToAll("F10/MENU key pressed")
+                                launchOriginalApp(activity, prefs)
+                                param.result = true
+                                return
+                            }
+                            
+                            if (keyCode == android.view.KeyEvent.KEYCODE_HOME) {
+                                val currentTime = System.currentTimeMillis()
+                                val lastClickTime = prefs.getLong(KEY_LAST_CLICK_TIME, 0)
+                                val clickCount = prefs.getInt(KEY_CLICK_COUNT, 0)
+                                
+                                if (currentTime - lastClickTime < 2000) {
+                                    val newClickCount = clickCount + 1
+                                    prefs.edit()
+                                        .putInt(KEY_CLICK_COUNT, newClickCount)
+                                        .putLong(KEY_LAST_CLICK_TIME, currentTime)
+                                        .apply()
+                                    
+                                    logToAll("Home click count: $newClickCount")
+                                    
+                                    if (newClickCount >= 5) {
+                                        logToAll("5 home clicks detected, launching original app")
+                                        launchOriginalApp(activity, prefs)
+                                        prefs.edit().putInt(KEY_CLICK_COUNT, 0).apply()
+                                    }
+                                } else {
+                                    prefs.edit()
+                                        .putInt(KEY_CLICK_COUNT, 1)
+                                        .putLong(KEY_LAST_CLICK_TIME, currentTime)
+                                        .apply()
+                                    logToAll("Home click count reset to 1")
+                                }
+                            }
+                        }
+                    }
+                }
+            )
+            
+            logToAll("Key listener setup completed")
+        } catch (e: Exception) {
+            logToAll("Failed to setup key listener: ${e.message}")
+            e.printStackTrace()
         }
     }
     
@@ -1285,6 +1368,249 @@ class XposedHook : IXposedHookLoadPackage {
         val intent = activity.intent
         activity.finish()
         activity.startActivity(intent)
+    }
+    
+    // 创建设置页面内容
+    private fun createSettingsContent(activity: Activity, prefs: android.content.SharedPreferences): LinearLayout {
+        val layout = LinearLayout(activity)
+        layout.orientation = LinearLayout.VERTICAL
+        layout.setBackgroundColor(Color.parseColor(COLOR_SURFACE))
+        layout.setPadding(
+            (16 * activity.resources.displayMetrics.density).toInt(),
+            (16 * activity.resources.displayMetrics.density).toInt(),
+            (16 * activity.resources.displayMetrics.density).toInt(),
+            (16 * activity.resources.displayMetrics.density).toInt()
+        )
+        
+        // 设置项列表
+        val settings = listOf(
+            Triple("夜间模式", "开启/关闭深色主题", "dark_mode"),
+            Triple("自动播放音频", "自动播放课本音频", "auto_play_audio"),
+            Triple("隐私政策", "查看隐私政策", "privacy_policy"),
+            Triple("用户协议", "查看用户协议", "user_agreement"),
+            Triple("版本信息", "当前版本：1.0.0", "version_info")
+        )
+        
+        for (setting in settings) {
+            layout.addView(createSettingItem(activity, setting.first, setting.second, setting.third, prefs))
+        }
+        
+        return layout
+    }
+    
+    // 创建单个设置项
+    private fun createSettingItem(activity: Activity, title: String, description: String, key: String, prefs: android.content.SharedPreferences): LinearLayout {
+        val dp = activity.resources.displayMetrics.density
+        
+        val item = LinearLayout(activity)
+        item.orientation = LinearLayout.HORIZONTAL
+        item.gravity = android.view.Gravity.CENTER_VERTICAL
+        item.setBackgroundColor(Color.parseColor(COLOR_SURFACE_CONTAINER))
+        item.setPadding(
+            (16 * dp).toInt(),
+            (16 * dp).toInt(),
+            (16 * dp).toInt(),
+            (16 * dp).toInt()
+        )
+        
+        val itemParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        itemParams.setMargins(0, 0, 0, (8 * dp).toInt())
+        item.layoutParams = itemParams
+        
+        // 图标
+        val icon = TextView(activity)
+        icon.text = "[设]"
+        icon.textSize = 20f
+        icon.setTextColor(Color.parseColor(COLOR_PRIMARY))
+        icon.setPadding(0, 0, (12 * dp).toInt(), 0)
+        
+        // 文本内容
+        val textLayout = LinearLayout(activity)
+        textLayout.orientation = LinearLayout.VERTICAL
+        textLayout.layoutParams = LinearLayout.LayoutParams(
+            0,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            1.0f
+        )
+        
+        val titleText = TextView(activity)
+        titleText.text = title
+        titleText.textSize = 16f
+        titleText.setTypeface(null, android.graphics.Typeface.BOLD)
+        titleText.setTextColor(Color.parseColor(COLOR_ON_SURFACE))
+        
+        val descText = TextView(activity)
+        descText.text = description
+        descText.textSize = 14f
+        descText.setTextColor(Color.parseColor(COLOR_OUTLINE))
+        descText.setPadding(0, (4 * dp).toInt(), 0, 0)
+        
+        textLayout.addView(titleText)
+        textLayout.addView(descText)
+        
+        // 开关控件（仅用于开关项）
+        val switch = android.widget.Switch(activity)
+        switch.isChecked = prefs.getBoolean(key, false)
+        switch.setPadding((8 * dp).toInt(), 0, 0, 0)
+        
+        item.addView(icon)
+        item.addView(textLayout)
+        
+        // 只为前两个选项添加开关
+        if (key == "dark_mode" || key == "auto_play_audio") {
+            item.addView(switch)
+            
+            switch.setOnCheckedChangeListener { _, isChecked ->
+                logToAll("Setting changed: $key = $isChecked")
+                prefs.edit().putBoolean(key, isChecked).apply()
+                try {
+                    android.widget.Toast.makeText(activity, "$title: ${if (isChecked) "开启" else "关闭"}", android.widget.Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    // 忽略Toast错误
+                }
+            }
+        }
+        
+        // 添加点击事件
+        item.setOnClickListener {
+            logToAll("Setting clicked: $title")
+            if (key == "privacy_policy" || key == "user_agreement") {
+                try {
+                    android.widget.Toast.makeText(activity, "$title 功能开发中", android.widget.Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    // 忽略Toast错误
+                }
+            }
+        }
+        
+        return item
+    }
+    
+    // 创建课外页面内容
+    private fun createExploreContent(activity: Activity): LinearLayout {
+        val layout = LinearLayout(activity)
+        layout.orientation = LinearLayout.VERTICAL
+        layout.setBackgroundColor(Color.parseColor(COLOR_SURFACE))
+        layout.setPadding(
+            (16 * activity.resources.displayMetrics.density).toInt(),
+            (16 * activity.resources.displayMetrics.density).toInt(),
+            (16 * activity.resources.displayMetrics.density).toInt(),
+            (16 * activity.resources.displayMetrics.density).toInt()
+        )
+        
+        // 课外学习卡片
+        val exploreItems = listOf(
+            Triple("[听]", "听力训练", "提升英语听力能力"),
+            Triple("[说]", "口语练习", "提高英语口语表达"),
+            Triple("[读]", "阅读理解", "增强英语阅读能力"),
+            Triple("[写]", "写作指导", "掌握英语写作技巧")
+        )
+        
+        // 创建2x2网格
+        val gridLayout = LinearLayout(activity)
+        gridLayout.orientation = LinearLayout.VERTICAL
+        
+        for (row in 0 until 2) {
+            val rowLayout = LinearLayout(activity)
+            rowLayout.orientation = LinearLayout.HORIZONTAL
+            rowLayout.layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            
+            for (col in 0 until 2) {
+                val index = row * 2 + col
+                if (index < exploreItems.size) {
+                    val (icon, title, desc) = exploreItems[index]
+                    rowLayout.addView(createExploreCard(activity, icon, title, desc))
+                }
+            }
+            
+            gridLayout.addView(rowLayout)
+        }
+        
+        layout.addView(gridLayout)
+        
+        return layout
+    }
+    
+    // 创建课外学习卡片
+    private fun createExploreCard(activity: Activity, icon: String, title: String, description: String): LinearLayout {
+        val dp = activity.resources.displayMetrics.density
+        
+        val card = LinearLayout(activity)
+        card.orientation = LinearLayout.VERTICAL
+        card.gravity = android.view.Gravity.CENTER
+        
+        // 渐变背景
+        val gradientDrawable = android.graphics.drawable.GradientDrawable()
+        gradientDrawable.orientation = android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM
+        gradientDrawable.colors = intArrayOf(
+            Color.parseColor(COLOR_PRIMARY),
+            Color.parseColor(COLOR_PRIMARY_CONTAINER)
+        )
+        gradientDrawable.cornerRadius = (16 * dp).toFloat()
+        card.background = gradientDrawable
+        
+        card.setPadding(
+            (16 * dp).toInt(),
+            (24 * dp).toInt(),
+            (16 * dp).toInt(),
+            (24 * dp).toInt()
+        )
+        
+        card.layoutParams = LinearLayout.LayoutParams(
+            0,
+            (120 * dp).toInt(),
+            1.0f
+        )
+        
+        val cardParams = card.layoutParams as LinearLayout.LayoutParams
+        cardParams.setMargins(0, 0, (8 * dp).toInt(), (8 * dp).toInt())
+        card.layoutParams = cardParams
+        
+        // 图标
+        val iconText = TextView(activity)
+        iconText.text = icon
+        iconText.textSize = 32f
+        iconText.setTextColor(Color.WHITE)
+        iconText.gravity = android.view.Gravity.CENTER
+        
+        // 标题
+        val titleText = TextView(activity)
+        titleText.text = title
+        titleText.textSize = 16f
+        titleText.setTypeface(null, android.graphics.Typeface.BOLD)
+        titleText.setTextColor(Color.WHITE)
+        titleText.gravity = android.view.Gravity.CENTER
+        titleText.setPadding(0, (8 * dp).toInt(), 0, 0)
+        
+        // 描述
+        val descText = TextView(activity)
+        descText.text = description
+        descText.textSize = 12f
+        descText.setTextColor(Color.parseColor("#E3F2FD"))
+        descText.gravity = android.view.Gravity.CENTER
+        descText.setPadding(0, (4 * dp).toInt(), 0, 0)
+        
+        card.addView(iconText)
+        card.addView(titleText)
+        card.addView(descText)
+        
+        // 添加点击事件
+        card.setOnClickListener {
+            logToAll("Explore clicked: $title")
+            try {
+                android.widget.Toast.makeText(activity, "$title 功能开发中", android.widget.Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                // 忽略Toast错误
+            }
+        }
+        
+        return card
     }
     
     // 检查是否是系统关键进程
