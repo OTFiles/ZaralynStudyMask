@@ -4,9 +4,13 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.content.pm.ResolveInfo
 import android.graphics.Color
+import android.os.Build
+import android.os.Bundle
+import android.util.Log
 import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -15,6 +19,11 @@ import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
+import java.io.File
+import java.io.FileWriter
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class XposedHook : IXposedHookLoadPackage {
 
@@ -25,30 +34,107 @@ class XposedHook : IXposedHookLoadPackage {
         private const val KEY_LAST_CLICK_TIME = "last_click_time"
         private const val KEY_UI_REPLACED = "ui_replaced"
         private const val KEY_MAIN_ACTIVITY = "main_activity"
+        private const val LOG_FILE = "log.log"
     }
 
     private var mainActivityClass: String? = null
+    private var logFile: File? = null
+    private var packageName: String = ""
 
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
-        val packageName = lpparam.packageName
+        packageName = lpparam.packageName
 
-        XposedBridge.log("========== ZaralynStudyMask: Loading hook for $packageName ==========")
+        logToAll("========== ZaralynStudyMask: Loading hook for $packageName ==========")
 
         try {
+            // 初始化日志文件
+            initLogFile(lpparam.classLoader)
+
             // 动态获取主 Activity 类名
             mainActivityClass = findMainActivityClass(lpparam.classLoader, packageName)
-            XposedBridge.log("ZaralynStudyMask: Main activity class: $mainActivityClass")
+            logToAll("Main activity class: $mainActivityClass")
 
-            // Hook ActivityThread.performLaunchActivity 来捕获所有 Activity 的启动
-            XposedBridge.log("ZaralynStudyMask: Hooking ActivityThread.performLaunchActivity")
+            // 方案1: Hook ActivityThread.performLaunchActivity - Activity启动Hook法
+            logToAll("Setting up Hook 1: ActivityThread.performLaunchActivity")
+            hookActivityThread(lpparam.classLoader)
+
+            // 方案2: Hook Activity.setContentView - setContentView拦截法
+            logToAll("Setting up Hook 2: Activity.setContentView")
+            hookSetContentView(lpparam.classLoader)
+
+            // 方案3: Hook PhoneWindow.setContentView - PhoneWindow底层修改法
+            logToAll("Setting up Hook 3: PhoneWindow.setContentView")
+            hookPhoneWindow(lpparam.classLoader)
+
+            // 方案4: Hook DecorView - DecorView挂载替换法
+            logToAll("Setting up Hook 4: DecorView.dispatchAttachedToWindow")
+            hookDecorView(lpparam.classLoader)
+
+            // 方案5: Hook LayoutInflater - LayoutInflater资源劫持法
+            logToAll("Setting up Hook 5: LayoutInflater.inflate")
+            hookLayoutInflater(lpparam.classLoader)
+
+            logToAll("All hooks installed successfully")
+
+        } catch (e: Exception) {
+            logToAll("Hook failed - ${e.message}")
+            e.printStackTrace()
+        }
+    }
+
+    private fun initLogFile(classLoader: ClassLoader) {
+        try {
+            val activityThreadClass = XposedHelpers.findClass("android.app.ActivityThread", classLoader)
+            val currentActivityThread = XposedHelpers.callStaticMethod(activityThreadClass, "currentActivityThread")
+            val context = XposedHelpers.getObjectField(currentActivityThread, "mSystemContext") as Context
+            
+            val appDir = context.filesDir
+            logFile = File(appDir, LOG_FILE)
+            
+            // 清空旧日志
+            if (logFile?.exists() == true) {
+                logFile?.delete()
+            }
+            
+            logToFile("Log file initialized: ${logFile?.absolutePath}")
+        } catch (e: Exception) {
+            XposedBridge.log("Failed to init log file: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+
+    private fun logToAll(message: String) {
+        val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault()).format(Date())
+        val logMessage = "[$timestamp] $message"
+        
+        XposedBridge.log("ZaralynStudyMask: $message")
+        logToFile(logMessage)
+    }
+
+    private fun logToFile(message: String) {
+        try {
+            logFile?.let { file ->
+                FileWriter(file, true).use { writer ->
+                    writer.write("$message\n")
+                    writer.flush()
+                }
+            }
+        } catch (e: Exception) {
+            // 忽略日志写入错误
+        }
+    }
+
+    // 方案1: ActivityThread Hook 法
+    private fun hookActivityThread(classLoader: ClassLoader) {
+        try {
             XposedHelpers.findAndHookMethod(
                 "android.app.ActivityThread",
-                lpparam.classLoader,
+                classLoader,
                 "performLaunchActivity",
                 "android.app.ActivityThread\$ActivityClientRecord",
-                android.content.Intent::class.java,
+                Intent::class.java,
                 String::class.java,
-                android.os.Bundle::class.java,
+                Bundle::class.java,
                 object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
                         try {
@@ -56,53 +142,55 @@ class XposedHook : IXposedHookLoadPackage {
                             val activityClassName = activity.javaClass.name
                             val intent = param.args[1] as Intent
                             
-                            XposedBridge.log("ZaralynStudyMask: Activity launched - $activityClassName")
-                            XposedBridge.log("ZaralynStudyMask: Intent action: ${intent.action}, flags: ${intent.flags}")
-                            XposedBridge.log("ZaralynStudyMask: Intent categories: ${intent.categories?.joinToString()}")
+                            logToAll("Activity launched: $activityClassName")
+                            logToAll("Intent action: ${intent.action}, flags: ${intent.flags}")
+                            logToAll("Intent categories: ${intent.categories?.joinToString()}")
                             
-                            // 检查是否是主 Activity
-                            val isMainActivity = isMainActivity(activity, intent, packageName)
-                            XposedBridge.log("ZaralynStudyMask: Is main activity: $isMainActivity")
-                            
-                            if (!isMainActivity) {
+                            if (!isMainActivity(activity, intent)) {
+                                logToAll("Not a main activity, skipping")
                                 return
                             }
                             
-                            XposedBridge.log("ZaralynStudyMask: === MAIN ACTIVITY DETECTED: $activityClassName ===")
+                            logToAll("=== MAIN ACTIVITY DETECTED: $activityClassName ===")
                             
-                            // 检查是否应该显示原应用
                             val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                             val showOriginal = prefs.getBoolean(KEY_SHOW_ORIGINAL, false)
                             
                             if (showOriginal) {
-                                XposedBridge.log("ZaralynStudyMask: Showing original app")
+                                logToAll("Showing original app")
                                 return
                             }
                             
-                            XposedBridge.log("ZaralynStudyMask: Replacing UI for main activity")
+                            logToAll("Replacing UI via ActivityThread hook")
                             
-                            // 延迟替换 UI，确保 Activity 完全初始化
                             activity.window.decorView.post {
                                 try {
                                     replaceActivityUI(activity, prefs)
                                 } catch (e: Exception) {
-                                    XposedBridge.log("ZaralynStudyMask: Failed to replace UI - ${e.message}")
+                                    logToAll("Failed to replace UI: ${e.message}")
                                     e.printStackTrace()
                                 }
                             }
                         } catch (e: Exception) {
-                            XposedBridge.log("ZaralynStudyMask: Error in performLaunchActivity hook - ${e.message}")
+                            logToAll("Error in performLaunchActivity hook: ${e.message}")
                             e.printStackTrace()
                         }
                     }
                 }
             )
+        } catch (e: Exception) {
+            logToAll("Failed to hook ActivityThread: ${e.message}")
+            e.printStackTrace()
+        }
+    }
 
-            // 备用方案：Hook setContentView
-            XposedBridge.log("ZaralynStudyMask: Hooking Activity.setContentView")
+    // 方案2: setContentView Hook 法
+    private fun hookSetContentView(classLoader: ClassLoader) {
+        try {
+            // Hook setContentView(int)
             XposedHelpers.findAndHookMethod(
                 Activity::class.java.name,
-                lpparam.classLoader,
+                classLoader,
                 "setContentView",
                 Int::class.javaPrimitiveType,
                 object : XC_MethodHook() {
@@ -111,10 +199,9 @@ class XposedHook : IXposedHookLoadPackage {
                             val activity = param.thisObject as Activity
                             val activityClassName = activity.javaClass.name
                             
-                            XposedBridge.log("ZaralynStudyMask: setContentView(int) called - $activityClassName")
+                            logToAll("setContentView(int) called: $activityClassName")
                             
-                            // 检查是否是主 Activity
-                            if (!isMainActivity(activity, null, packageName)) {
+                            if (!isMainActivity(activity, null)) {
                                 return
                             }
                             
@@ -126,23 +213,24 @@ class XposedHook : IXposedHookLoadPackage {
                                 return
                             }
                             
-                            XposedBridge.log("ZaralynStudyMask: Replacing UI via setContentView hook")
+                            logToAll("Replacing UI via setContentView(int) hook")
                             prefs.edit().putBoolean(KEY_UI_REPLACED, true).apply()
                             
                             val newUI = createMaskUI(activity, prefs)
                             activity.setContentView(newUI)
                             param.setResult(null)
                         } catch (e: Exception) {
-                            XposedBridge.log("ZaralynStudyMask: Error in setContentView(int) hook - ${e.message}")
+                            logToAll("Error in setContentView(int) hook: ${e.message}")
                             e.printStackTrace()
                         }
                     }
                 }
             )
 
+            // Hook setContentView(View)
             XposedHelpers.findAndHookMethod(
                 Activity::class.java.name,
-                lpparam.classLoader,
+                classLoader,
                 "setContentView",
                 View::class.java,
                 object : XC_MethodHook() {
@@ -151,10 +239,9 @@ class XposedHook : IXposedHookLoadPackage {
                             val activity = param.thisObject as Activity
                             val activityClassName = activity.javaClass.name
                             
-                            XposedBridge.log("ZaralynStudyMask: setContentView(View) called - $activityClassName")
+                            logToAll("setContentView(View) called: $activityClassName")
                             
-                            // 检查是否是主 Activity
-                            if (!isMainActivity(activity, null, packageName)) {
+                            if (!isMainActivity(activity, null)) {
                                 return
                             }
                             
@@ -166,34 +253,189 @@ class XposedHook : IXposedHookLoadPackage {
                                 return
                             }
                             
-                            XposedBridge.log("ZaralynStudyMask: Replacing UI via setContentView(View) hook")
+                            logToAll("Replacing UI via setContentView(View) hook")
                             prefs.edit().putBoolean(KEY_UI_REPLACED, true).apply()
                             
                             val newUI = createMaskUI(activity, prefs)
                             activity.setContentView(newUI)
                             param.setResult(null)
                         } catch (e: Exception) {
-                            XposedBridge.log("ZaralynStudyMask: Error in setContentView(View) hook - ${e.message}")
+                            logToAll("Error in setContentView(View) hook: ${e.message}")
                             e.printStackTrace()
                         }
                     }
                 }
             )
-
         } catch (e: Exception) {
-            XposedBridge.log("ZaralynStudyMask: Hook failed - ${e.message}")
+            logToAll("Failed to hook setContentView: ${e.message}")
             e.printStackTrace()
         }
     }
 
+    // 方案3: PhoneWindow Hook 法
+    private fun hookPhoneWindow(classLoader: ClassLoader) {
+        try {
+            XposedHelpers.findAndHookMethod(
+                "com.android.internal.policy.PhoneWindow",
+                classLoader,
+                "setContentView",
+                Int::class.javaPrimitiveType,
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        try {
+                            val phoneWindow = param.thisObject
+                            val activity = XposedHelpers.getObjectField(phoneWindow, "mActivity") as? Activity
+                            
+                            if (activity == null) {
+                                return
+                            }
+                            
+                            val activityClassName = activity.javaClass.name
+                            logToAll("PhoneWindow.setContentView called: $activityClassName")
+                            
+                            if (!isMainActivity(activity, null)) {
+                                return
+                            }
+                            
+                            val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                            val showOriginal = prefs.getBoolean(KEY_SHOW_ORIGINAL, false)
+                            val uiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
+                            
+                            if (showOriginal || uiReplaced) {
+                                return
+                            }
+                            
+                            logToAll("Replacing UI via PhoneWindow hook")
+                            prefs.edit().putBoolean(KEY_UI_REPLACED, true).apply()
+                            
+                            val newUI = createMaskUI(activity, prefs)
+                            activity.setContentView(newUI)
+                            param.setResult(null)
+                        } catch (e: Exception) {
+                            logToAll("Error in PhoneWindow hook: ${e.message}")
+                            e.printStackTrace()
+                        }
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            logToAll("Failed to hook PhoneWindow: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+
+    // 方案4: DecorView Hook 法
+    private fun hookDecorView(classLoader: ClassLoader) {
+        try {
+            XposedHelpers.findAndHookMethod(
+                "android.view.View",
+                classLoader,
+                "dispatchAttachedToWindow",
+                android.view.AttachInfo::class.java,
+                Int::class.javaPrimitiveType,
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        try {
+                            val view = param.thisObject
+                            
+                            // 检查是否是 DecorView
+                            if (view.javaClass.name != "com.android.internal.policy.DecorView") {
+                                return
+                            }
+                            
+                            // 获取 Activity
+                            val context = view.context
+                            if (context !is Activity) {
+                                return
+                            }
+                            
+                            val activity = context
+                            val activityClassName = activity.javaClass.name
+                            
+                            logToAll("DecorView attached: $activityClassName")
+                            
+                            if (!isMainActivity(activity, null)) {
+                                return
+                            }
+                            
+                            val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                            val showOriginal = prefs.getBoolean(KEY_SHOW_ORIGINAL, false)
+                            val uiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
+                            
+                            if (showOriginal || uiReplaced) {
+                                return
+                            }
+                            
+                            logToAll("Replacing UI via DecorView hook")
+                            prefs.edit().putBoolean(KEY_UI_REPLACED, true).apply()
+                            
+                            activity.window.decorView.post {
+                                try {
+                                    val newUI = createMaskUI(activity, prefs)
+                                    activity.setContentView(newUI)
+                                } catch (e: Exception) {
+                                    logToAll("Failed to replace UI via DecorView: ${e.message}")
+                                    e.printStackTrace()
+                                }
+                            }
+                        } catch (e: Exception) {
+                            logToAll("Error in DecorView hook: ${e.message}")
+                            e.printStackTrace()
+                        }
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            logToAll("Failed to hook DecorView: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+
+    // 方案5: LayoutInflater Hook 法
+    private fun hookLayoutInflater(classLoader: ClassLoader) {
+        try {
+            XposedHelpers.findAndHookMethod(
+                "android.view.LayoutInflater",
+                classLoader,
+                "inflate",
+                Int::class.javaPrimitiveType,
+                ViewGroup::class.java,
+                Boolean::class.javaPrimitiveType,
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        try {
+                            val context = XposedHelpers.getObjectField(param.thisObject, "mContext") as? Context
+                            
+                            if (context !is Activity) {
+                                return
+                            }
+                            
+                            val activity = context
+                            val activityClassName = activity.javaClass.name
+                            
+                            // 只记录日志，不替换
+                            logToAll("LayoutInflater.inflate called: $activityClassName, resource: ${param.args[0]}")
+                        } catch (e: Exception) {
+                            logToAll("Error in LayoutInflater hook: ${e.message}")
+                            e.printStackTrace()
+                        }
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            logToAll("Failed to hook LayoutInflater: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+
+    // 动态获取主 Activity
     private fun findMainActivityClass(classLoader: ClassLoader, packageName: String): String? {
         try {
-            // 获取 PackageManager
             val activityThreadClass = XposedHelpers.findClass("android.app.ActivityThread", classLoader)
             val currentActivityThread = XposedHelpers.callStaticMethod(activityThreadClass, "currentActivityThread")
             val context = XposedHelpers.getObjectField(currentActivityThread, "mSystemContext") as Context
             
-            // 获取启动 Intent
+            // 方法1: PackageManager.getLaunchIntentForPackage()
             val packageManager = context.packageManager
             val intent = packageManager.getLaunchIntentForPackage(packageName)
             
@@ -201,12 +443,12 @@ class XposedHook : IXposedHookLoadPackage {
                 val component = intent.component
                 if (component != null) {
                     val className = component.className
-                    XposedBridge.log("ZaralynStudyMask: Found main activity via PackageManager: $className")
+                    logToAll("Found main activity via PackageManager: $className")
                     return className
                 }
             }
             
-            // 备用方法：查询所有启动 Activity
+            // 方法2: queryIntentActivities()
             val mainIntent = Intent(Intent.ACTION_MAIN)
             mainIntent.addCategory(Intent.CATEGORY_LAUNCHER)
             mainIntent.`package` = packageName
@@ -215,43 +457,46 @@ class XposedHook : IXposedHookLoadPackage {
             if (resolveInfos.isNotEmpty()) {
                 val resolveInfo = resolveInfos[0]
                 val className = resolveInfo.activityInfo.name
-                XposedBridge.log("ZaralynStudyMask: Found main activity via queryIntentActivities: $className")
+                logToAll("Found main activity via queryIntentActivities: $className")
                 return className
             }
             
         } catch (e: Exception) {
-            XposedBridge.log("ZaralynStudyMask: Error finding main activity - ${e.message}")
+            logToAll("Error finding main activity: ${e.message}")
             e.printStackTrace()
         }
         
         return null
     }
 
-    private fun isMainActivity(activity: Activity, intent: Intent?, packageName: String): Boolean {
-        // 方法1：检查缓存的类名
-        if (mainActivityClass != null && activity.javaClass.name == mainActivityClass) {
+    // 判断是否是主 Activity
+    private fun isMainActivity(activity: Activity, intent: Intent?): Boolean {
+        val activityClassName = activity.javaClass.name
+        
+        // 方法1: 缓存的类名
+        if (mainActivityClass != null && activityClassName == mainActivityClass) {
+            logToAll("Main activity detected via cache: $activityClassName")
             return true
         }
         
-        // 方法2：检查类名是否以 MainActivity 结尾
-        if (activity.javaClass.name.endsWith(".MainActivity")) {
+        // 方法2: 类名以 MainActivity 结尾
+        if (activityClassName.endsWith(".MainActivity")) {
+            logToAll("Main activity detected via class name: $activityClassName")
             return true
         }
         
-        // 方法3：检查 Intent
+        // 方法3: Intent 检查
         if (intent != null) {
             val isMainAction = intent.action == Intent.ACTION_MAIN
             val isLauncherCategory = intent.categories?.contains(Intent.CATEGORY_LAUNCHER) == true
-            val isFromLauncher = (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0
-            
-            XposedBridge.log("ZaralynStudyMask: Intent check - action: $isMainAction, launcher: $isLauncherCategory, fromLauncher: $isFromLauncher")
             
             if (isMainAction && isLauncherCategory) {
+                logToAll("Main activity detected via Intent: $activityClassName")
                 return true
             }
         }
         
-        // 方法4：检查是否是包中的第一个 Activity
+        // 方法4: PackageManager 查询
         try {
             val packageManager = activity.packageManager
             val mainIntent = Intent(Intent.ACTION_MAIN)
@@ -261,7 +506,8 @@ class XposedHook : IXposedHookLoadPackage {
             val resolveInfos = packageManager.queryIntentActivities(mainIntent, PackageManager.MATCH_DEFAULT_ONLY)
             if (resolveInfos.isNotEmpty()) {
                 val mainClassName = resolveInfos[0].activityInfo.name
-                if (activity.javaClass.name == mainClassName) {
+                if (activityClassName == mainClassName) {
+                    logToAll("Main activity detected via PackageManager query: $activityClassName")
                     return true
                 }
             }
@@ -272,25 +518,37 @@ class XposedHook : IXposedHookLoadPackage {
         return false
     }
 
+    // 替换 Activity UI
     private fun replaceActivityUI(activity: Activity, prefs: android.content.SharedPreferences) {
-        XposedBridge.log("ZaralynStudyMask: Replacing activity UI")
+        logToAll("Replacing activity UI")
         
         try {
+            // 保存原视图
+            val decorView = activity.window.decorView
+            val contentView = decorView.findViewById<ViewGroup>(android.R.id.content)
+            
+            if (contentView != null && contentView.childCount > 0) {
+                val originalView = contentView.getChildAt(0)
+                logToAll("Original view: ${originalView.javaClass.name}")
+            }
+            
+            // 创建并设置新 UI
             val newUI = createMaskUI(activity, prefs)
             activity.setContentView(newUI)
             prefs.edit().putBoolean(KEY_UI_REPLACED, true).apply()
             
             setupKeyListener(activity, prefs)
             
-            XposedBridge.log("ZaralynStudyMask: UI replaced successfully")
+            logToAll("UI replaced successfully")
         } catch (e: Exception) {
-            XposedBridge.log("ZaralynStudyMask: Failed to replace UI - ${e.message}")
+            logToAll("Failed to replace UI: ${e.message}")
             e.printStackTrace()
         }
     }
 
+    // 创建伪装界面
     private fun createMaskUI(activity: Activity, prefs: android.content.SharedPreferences): View {
-        XposedBridge.log("ZaralynStudyMask: Creating mask UI")
+        logToAll("Creating mask UI")
         
         val rootLayout = LinearLayout(activity)
         rootLayout.orientation = LinearLayout.VERTICAL
@@ -467,6 +725,7 @@ class XposedHook : IXposedHookLoadPackage {
         return nav
     }
     
+    // 设置按键监听
     private fun setupKeyListener(activity: Activity, prefs: android.content.SharedPreferences) {
         val decorView = activity.window.decorView
         
@@ -474,7 +733,7 @@ class XposedHook : IXposedHookLoadPackage {
             if (event.action == android.view.KeyEvent.ACTION_DOWN) {
                 if (keyCode == android.view.KeyEvent.KEYCODE_F10 || 
                     keyCode == android.view.KeyEvent.KEYCODE_MENU) {
-                    XposedBridge.log("ZaralynStudyMask: F10/MENU key pressed")
+                    logToAll("F10/MENU key pressed")
                     launchOriginalApp(activity, prefs)
                     return@setOnKeyListener true
                 }
@@ -491,7 +750,7 @@ class XposedHook : IXposedHookLoadPackage {
                             .putLong(KEY_LAST_CLICK_TIME, currentTime)
                             .apply()
                         
-                        XposedBridge.log("ZaralynStudyMask: Home click count: $newClickCount")
+                        logToAll("Home click count: $newClickCount")
                         
                         if (newClickCount >= 5) {
                             launchOriginalApp(activity, prefs)
@@ -509,8 +768,9 @@ class XposedHook : IXposedHookLoadPackage {
         }
     }
     
+    // 启动原应用
     private fun launchOriginalApp(activity: Activity, prefs: android.content.SharedPreferences) {
-        XposedBridge.log("ZaralynStudyMask: Launching original app")
+        logToAll("Launching original app")
         
         prefs.edit()
             .putBoolean(KEY_SHOW_ORIGINAL, true)
