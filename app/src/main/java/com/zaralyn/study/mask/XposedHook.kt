@@ -1,7 +1,8 @@
 package com.zaralyn.study.mask
 
+import android.app.Activity
+import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
@@ -21,21 +22,28 @@ class XposedHook : IXposedHookLoadPackage {
         XposedBridge.log("ZaralynStudyMask: Loading hook for $packageName")
 
         try {
-            // Hook Activity 的 onCreate 方法，拦截所有 Activity 的启动
+            // Hook 目标应用包名的 Activity.onCreate
+            // 我们通过 hook Instrumentation.callActivityOnCreate 来拦截所有 Activity 的创建
             XposedHelpers.findAndHookMethod(
-                android.app.Activity::class.java.name,
+                "android.app.Instrumentation",
                 lpparam.classLoader,
-                "onCreate",
+                "callActivityOnCreate",
+                Activity::class.java,
                 android.os.Bundle::class.java,
                 object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val activity = param.thisObject as android.app.Activity
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        val activity = param.args[0] as Activity
                         val activityClassName = activity.javaClass.name
 
-                        XposedBridge.log("ZaralynStudyMask: Activity onCreate - $activityClassName")
+                        XposedBridge.log("ZaralynStudyMask: callActivityOnCreate - $activityClassName")
+
+                        // 只处理 MainActivity
+                        if (!activityClassName.endsWith(".MainActivity")) {
+                            return
+                        }
 
                         // 检查是否应该显示原应用
-                        val prefs = activity.getSharedPreferences(PREFS_NAME, 0)
+                        val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                         val showOriginal = prefs.getBoolean(KEY_SHOW_ORIGINAL, false)
 
                         if (showOriginal) {
@@ -43,15 +51,22 @@ class XposedHook : IXposedHookLoadPackage {
                             return
                         }
 
-                        // 如果是目标应用的 MainActivity，启动我们的伪装界面
-                        if (activityClassName.endsWith(".MainActivity")) {
-                            XposedBridge.log("ZaralynStudyMask: Launching ZaralynMainActivity")
+                        XposedBridge.log("ZaralynStudyMask: Replacing MainActivity with ZaralynMainActivity")
 
-                            val intent = Intent(activity, ZaralynMainActivity::class.java)
-                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                            activity.startActivity(intent)
-                            activity.finish()
-                        }
+                        // 设置标志，防止循环
+                        prefs.edit().putBoolean("in_mask_mode", true).apply()
+
+                        // 启动伪装界面
+                        val intent = Intent()
+                        intent.setClass(activity, Class.forName("com.zaralyn.study.mask.ZaralynMainActivity"))
+                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        activity.startActivity(intent)
+
+                        // 结束原 Activity
+                        activity.finish()
+                        
+                        // 取消原来的 onCreate 调用
+                        param.setResult(null)
                     }
                 }
             )

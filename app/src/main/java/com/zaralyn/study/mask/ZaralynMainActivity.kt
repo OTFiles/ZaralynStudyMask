@@ -10,6 +10,7 @@ import com.zaralyn.study.mask.databinding.ActivityMainBinding
 import com.zaralyn.study.mask.ui.fragments.HomeFragment
 import com.zaralyn.study.mask.ui.fragments.ExploreFragment
 import com.zaralyn.study.mask.ui.fragments.SettingsFragment
+import de.robv.android.xposed.XposedBridge
 
 class ZaralynMainActivity : AppCompatActivity() {
 
@@ -90,13 +91,16 @@ class ZaralynMainActivity : AppCompatActivity() {
             val prefs = getSharedPreferences("ZaralynStudyMask", 0)
             prefs.edit().putBoolean("show_original_app", true).apply()
 
+            XposedBridge.log("ZaralynMainActivity: Launching original app")
+
             // 重新启动应用，这次会显示原应用
             val intent = packageManager.getLaunchIntentForPackage(packageName)
-            intent?.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
+            intent?.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             startActivity(intent)
 
             finish()
         } catch (e: Exception) {
+            XposedBridge.log("ZaralynMainActivity: Failed to launch original app - ${e.message}")
             e.printStackTrace()
             android.widget.Toast.makeText(this, "启动原应用失败", android.widget.Toast.LENGTH_SHORT).show()
         }
