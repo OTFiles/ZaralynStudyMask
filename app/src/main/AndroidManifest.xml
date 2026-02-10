@@ -16,6 +16,20 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ZaralynStudyMask">
 
+        <!-- Xposed Module -->
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+        <meta-data
+            android:name="xposeddescription"
+            android:value="高中英语学习伪装层 - 替换目标应用MainActivity" />
+        <meta-data
+            android:name="xposedminversion"
+            android:value="93" />
+        <meta-data
+            android:name="xposedsharedprefs"
+            android:value="true" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
