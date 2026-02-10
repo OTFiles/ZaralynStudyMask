@@ -3,10 +3,6 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
-repositories {
-    maven { url 'https://api.xposed.info/' }
-}
-
 android {
     namespace 'com.zaralyn.study.mask'
     compileSdk 34
