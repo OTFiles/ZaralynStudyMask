@@ -154,11 +154,13 @@ class XposedHook : IXposedHookLoadPackage {
                             logToAll("=== MAIN ACTIVITY DETECTED: $activityClassName ===")
                             
                             val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                            val showOriginal = prefs.getBoolean(KEY_SHOW_ORIGINAL, false)
                             
+                            // 重置 showOriginal 标志，确保每次启动都显示伪装界面
+                            // 这修复了第二次进入直接显示原app的问题
+                            val showOriginal = prefs.getBoolean(KEY_SHOW_ORIGINAL, false)
                             if (showOriginal) {
-                                logToAll("Showing original app")
-                                return
+                                logToAll("Resetting KEY_SHOW_ORIGINAL from true to false")
+                                prefs.edit().putBoolean(KEY_SHOW_ORIGINAL, false).apply()
                             }
                             
                             logToAll("Replacing UI via ActivityThread hook")
@@ -232,11 +234,12 @@ class XposedHook : IXposedHookLoadPackage {
                                 logToAll("=== MAIN ACTIVITY DETECTED: $activityClassName ===")
                                 
                                 val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                                val showOriginal = prefs.getBoolean(KEY_SHOW_ORIGINAL, false)
                                 
+                                // 重置 showOriginal 标志，确保每次启动都显示伪装界面
+                                val showOriginal = prefs.getBoolean(KEY_SHOW_ORIGINAL, false)
                                 if (showOriginal) {
-                                    logToAll("Showing original app")
-                                    return
+                                    logToAll("Resetting KEY_SHOW_ORIGINAL from true to false")
+                                    prefs.edit().putBoolean(KEY_SHOW_ORIGINAL, false).apply()
                                 }
                                 
                                 logToAll("Replacing UI via ActivityThread hook")
@@ -863,27 +866,69 @@ class XposedHook : IXposedHookLoadPackage {
             currentGrade = gradeLevel
             prefs.edit().putInt(KEY_SELECTED_GRADE, gradeLevel).apply()
             
-            // 刷新课本列表
-            val contentLayout = activity.findViewById<LinearLayout>(android.R.id.content)
-            val scrollView = contentLayout.getChildAt(0) as ScrollView
-            val rootLayout = scrollView.getChildAt(0) as LinearLayout
-            
-            // 找到课本列表并更新
-            for (i in 0 until rootLayout.childCount) {
-                val child = rootLayout.getChildAt(i)
-                if (child is TextView && child.text.toString() == "课本列表") {
-                    // 找到了课本列表标题，替换下一个子元素
-                    if (i + 1 < rootLayout.childCount) {
-                        val oldBookList = rootLayout.getChildAt(i + 1)
-                        rootLayout.removeView(oldBookList)
-                        rootLayout.addView(createBookList(activity, prefs), i + 1)
-                    }
-                    break
+            try {
+                // 刷新课本列表 - 使用安全的类型转换
+                val contentView = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
+                if (contentView == null || contentView.childCount == 0) {
+                    logToAll("Content view not found or empty")
+                    return@setOnClickListener
                 }
+                
+                // 安全地遍历视图层级查找 rootLayout
+                var rootLayout: LinearLayout? = null
+                
+                // 尝试第一层
+                val firstChild = contentView.getChildAt(0)
+                if (firstChild is LinearLayout) {
+                    rootLayout = firstChild
+                } else if (firstChild is ScrollView) {
+                    // 如果是ScrollView，获取其子元素
+                    val scrollViewChild = firstChild.getChildAt(0)
+                    if (scrollViewChild is LinearLayout) {
+                        rootLayout = scrollViewChild
+                    }
+                } else if (firstChild is android.view.ViewGroup) {
+                    // 递归查找LinearLayout
+                    for (i in 0 until firstChild.childCount) {
+                        val grandChild = firstChild.getChildAt(i)
+                        if (grandChild is ScrollView) {
+                            val scrollViewChild = grandChild.getChildAt(0)
+                            if (scrollViewChild is LinearLayout) {
+                                rootLayout = scrollViewChild
+                                break
+                            }
+                        } else if (grandChild is LinearLayout) {
+                            rootLayout = grandChild
+                            break
+                        }
+                    }
+                }
+                
+                if (rootLayout == null) {
+                    logToAll("Root layout not found")
+                    return@setOnClickListener
+                }
+                
+                // 找到课本列表并更新
+                for (i in 0 until rootLayout.childCount) {
+                    val child = rootLayout.getChildAt(i)
+                    if (child is TextView && child.text.toString() == "课本列表") {
+                        // 找到了课本列表标题，替换下一个子元素
+                        if (i + 1 < rootLayout.childCount) {
+                            val oldBookList = rootLayout.getChildAt(i + 1)
+                            rootLayout.removeView(oldBookList)
+                            rootLayout.addView(createBookList(activity, prefs), i + 1)
+                        }
+                        break
+                    }
+                }
+                
+                // 刷新年级卡片状态
+                refreshGradeCards(activity, rootLayout, prefs)
+            } catch (e: Exception) {
+                logToAll("Error refreshing grade selection: ${e.message}")
+                e.printStackTrace()
             }
-            
-            // 刷新年级卡片状态
-            refreshGradeCards(activity, rootLayout, prefs)
         }
         
         // 添加触摸反馈
