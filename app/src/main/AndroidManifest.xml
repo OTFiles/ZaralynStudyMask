@@ -16,6 +16,24 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ZaralynStudyMask">
 
+        <!-- 主界面 - 用于查看日志 -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.ZaralynStudyMask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 日志查看界面 -->
+        <activity
+            android:name=".LogViewerActivity"
+            android:exported="false"
+            android:label="日志查看器"
+            android:theme="@style/Theme.ZaralynStudyMask" />
+
         <!-- Xposed Module -->
         <meta-data
             android:name="xposedmodule"
