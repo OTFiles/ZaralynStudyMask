@@ -327,11 +327,13 @@ class XposedHook : IXposedHookLoadPackage {
     // 方案4: DecorView Hook 法
     private fun hookDecorView(classLoader: ClassLoader) {
         try {
+            val attachInfoClass = XposedHelpers.findClass("android.view.View\$AttachInfo", classLoader)
+            
             XposedHelpers.findAndHookMethod(
                 "android.view.View",
                 classLoader,
                 "dispatchAttachedToWindow",
-                android.view.AttachInfo::class.java,
+                attachInfoClass,
                 Int::class.javaPrimitiveType,
                 object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
@@ -344,12 +346,12 @@ class XposedHook : IXposedHookLoadPackage {
                             }
                             
                             // 获取 Activity
-                            val context = view.context
-                            if (context !is Activity) {
+                            val viewContext = XposedHelpers.callMethod(view, "getContext") as Context
+                            if (viewContext !is Activity) {
                                 return
                             }
                             
-                            val activity = context
+                            val activity = viewContext
                             val activityClassName = activity.javaClass.name
                             
                             logToAll("DecorView attached: $activityClassName")
@@ -404,13 +406,13 @@ class XposedHook : IXposedHookLoadPackage {
                 object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
                         try {
-                            val context = XposedHelpers.getObjectField(param.thisObject, "mContext") as? Context
+                            val inflaterContext = XposedHelpers.getObjectField(param.thisObject, "mContext") as? Context
                             
-                            if (context !is Activity) {
+                            if (inflaterContext !is Activity) {
                                 return
                             }
                             
-                            val activity = context
+                            val activity = inflaterContext
                             val activityClassName = activity.javaClass.name
                             
                             // 只记录日志，不替换
