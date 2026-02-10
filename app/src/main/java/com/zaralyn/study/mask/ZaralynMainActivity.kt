@@ -11,7 +11,7 @@ import com.zaralyn.study.mask.ui.fragments.HomeFragment
 import com.zaralyn.study.mask.ui.fragments.ExploreFragment
 import com.zaralyn.study.mask.ui.fragments.SettingsFragment
 
-class MainActivity : AppCompatActivity() {
+class ZaralynMainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private var homeClickCount = 0
@@ -86,19 +86,19 @@ class MainActivity : AppCompatActivity() {
 
     private fun launchOriginalApp() {
         try {
-            // 获取原应用的包名和主Activity类名
-            // 这里需要根据实际情况配置
-            val packageName = packageName.removeSuffix(".mask")
-            val className = "$packageName.MainActivity"
+            // 设置标志，让 XposedHook 知道应该显示原应用
+            val prefs = getSharedPreferences("ZaralynStudyMask", 0)
+            prefs.edit().putBoolean("show_original_app", true).apply()
 
-            val intent = Intent().setClassName(packageName, className)
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            // 重新启动应用，这次会显示原应用
+            val intent = packageManager.getLaunchIntentForPackage(packageName)
+            intent?.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
             startActivity(intent)
+
             finish()
         } catch (e: Exception) {
             e.printStackTrace()
-            // 如果找不到原应用，显示提示
-            android.widget.Toast.makeText(this, "未找到原应用", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, "启动原应用失败", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 }

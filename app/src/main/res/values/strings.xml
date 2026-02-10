@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">高中英语</string>
+    <string name="app_name">ZaralynStudyMask</string>
     <string name="grade_10">高一</string>
     <string name="grade_11">高二</string>
     <string name="grade_12">高三</string>

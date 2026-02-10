@@ -31,7 +31,7 @@
             android:value="true" />
 
         <activity
-            android:name=".MainActivity"
+            android:name=".ZaralynMainActivity"
             android:exported="true"
             android:theme="@style/Theme.ZaralynStudyMask">
             <intent-filter>
