@@ -39,6 +39,7 @@ class XposedHook : IXposedHookLoadPackage {
 
     private var mainActivityClass: String? = null
     private var logFile: File? = null
+    private var logFileAlt: File? = null
     private var packageName: String = ""
 
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
@@ -88,6 +89,7 @@ class XposedHook : IXposedHookLoadPackage {
             val currentActivityThread = XposedHelpers.callStaticMethod(activityThreadClass, "currentActivityThread")
             val context = XposedHelpers.getObjectField(currentActivityThread, "mSystemContext") as Context
             
+            // 获取标准文件目录
             val appDir = context.filesDir
             logFile = File(appDir, LOG_FILE)
             
@@ -96,7 +98,26 @@ class XposedHook : IXposedHookLoadPackage {
                 logFile?.delete()
             }
             
+            // 同时尝试创建备用路径 /data/user/0/
+            val altDir = File("/data/user/0/$packageName/files")
+            if (altDir.exists() || altDir.mkdirs()) {
+                logFileAlt = File(altDir, LOG_FILE)
+                if (logFileAlt?.exists() == true) {
+                    logFileAlt?.delete()
+                }
+            }
+            
+            // 记录路径信息
+            XposedBridge.log("ZaralynStudyMask: App files dir: $appDir")
+            XposedBridge.log("ZaralynStudyMask: Log file path: ${logFile?.absolutePath}")
+            if (logFileAlt != null) {
+                XposedBridge.log("ZaralynStudyMask: Alt log file path: ${logFileAlt?.absolutePath}")
+            }
+            
             logToFile("Log file initialized: ${logFile?.absolutePath}")
+            if (logFileAlt != null) {
+                logToFile("Alt log file initialized: ${logFileAlt?.absolutePath}")
+            }
         } catch (e: Exception) {
             XposedBridge.log("Failed to init log file: ${e.message}")
             e.printStackTrace()
@@ -113,10 +134,27 @@ class XposedHook : IXposedHookLoadPackage {
 
     private fun logToFile(message: String) {
         try {
+            // 写入主日志文件
             logFile?.let { file ->
-                FileWriter(file, true).use { writer ->
-                    writer.write("$message\n")
-                    writer.flush()
+                try {
+                    FileWriter(file, true).use { writer ->
+                        writer.write("$message\n")
+                        writer.flush()
+                    }
+                } catch (e: Exception) {
+                    // 忽略主文件写入错误
+                }
+            }
+            
+            // 写入备用日志文件
+            logFileAlt?.let { file ->
+                try {
+                    FileWriter(file, true).use { writer ->
+                        writer.write("$message\n")
+                        writer.flush()
+                    }
+                } catch (e: Exception) {
+                    // 忽略备用文件写入错误
                 }
             }
         } catch (e: Exception) {
