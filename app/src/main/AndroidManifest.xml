@@ -30,21 +30,6 @@
             android:name="xposedsharedprefs"
             android:value="true" />
 
-        <activity
-            android:name=".ZaralynMainActivity"
-            android:exported="true"
-            android:theme="@style/Theme.ZaralynStudyMask">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-
-        <activity
-            android:name=".ReaderActivity"
-            android:exported="false"
-            android:theme="@style/Theme.ZaralynStudyMask" />
-
     </application>
 
 </manifest>
