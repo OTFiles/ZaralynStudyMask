@@ -105,13 +105,29 @@ class XposedHook : IXposedHookLoadPackage {
                 object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
                         try {
+                            // 检查返回值是否为有效的 Activity
+                            if (param.result == null) {
+                                return
+                            }
+                            
                             val activity = param.result as Activity
                             val activityClassName = activity.javaClass.name
-                            val intent = param.args[1] as Intent
+                            
+                            // 安全获取 Intent，处理 null 情况
+                            val intent = if (param.args.size > 1) {
+                                param.args[1] as? Intent
+                            } else {
+                                null
+                            }
                             
                             logToAll("Activity launched: $activityClassName")
-                            logToAll("Intent action: ${intent.action}, flags: ${intent.flags}")
-                            logToAll("Intent categories: ${intent.categories?.joinToString()}")
+                            
+                            if (intent != null) {
+                                logToAll("Intent action: ${intent.action}, flags: ${intent.flags}")
+                                logToAll("Intent categories: ${intent.categories?.joinToString()}")
+                            } else {
+                                logToAll("Intent is null, trying to get from activity")
+                            }
                             
                             if (!isMainActivity(activity, intent)) {
                                 logToAll("Not a main activity, skipping")
@@ -130,13 +146,19 @@ class XposedHook : IXposedHookLoadPackage {
                             
                             logToAll("Replacing UI via ActivityThread hook")
                             
-                            activity.window.decorView.post {
-                                try {
-                                    replaceActivityUI(activity, prefs)
-                                } catch (e: Exception) {
-                                    logToAll("Failed to replace UI: ${e.message}")
-                                    e.printStackTrace()
+                            // 检查是否已经替换过，避免重复替换
+                            val uiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
+                            if (!uiReplaced) {
+                                activity.window.decorView.post {
+                                    try {
+                                        replaceActivityUI(activity, prefs)
+                                    } catch (e: Exception) {
+                                        logToAll("Failed to replace UI: ${e.message}")
+                                        e.printStackTrace()
+                                    }
                                 }
+                            } else {
+                                logToAll("UI already replaced, skipping")
                             }
                         } catch (e: Exception) {
                             logToAll("Error in performLaunchActivity hook: ${e.message}")
@@ -161,13 +183,29 @@ class XposedHook : IXposedHookLoadPackage {
                     object : XC_MethodHook() {
                         override fun afterHookedMethod(param: MethodHookParam) {
                             try {
+                                // 检查返回值是否为有效的 Activity
+                                if (param.result == null) {
+                                    return
+                                }
+                                
                                 val activity = param.result as Activity
                                 val activityClassName = activity.javaClass.name
-                                val intent = param.args[1] as Intent
+                                
+                                // 安全获取 Intent，处理 null 情况
+                                val intent = if (param.args.size > 1) {
+                                    param.args[1] as? Intent
+                                } else {
+                                    null
+                                }
                                 
                                 logToAll("Activity launched: $activityClassName")
-                                logToAll("Intent action: ${intent.action}, flags: ${intent.flags}")
-                                logToAll("Intent categories: ${intent.categories?.joinToString()}")
+                                
+                                if (intent != null) {
+                                    logToAll("Intent action: ${intent.action}, flags: ${intent.flags}")
+                                    logToAll("Intent categories: ${intent.categories?.joinToString()}")
+                                } else {
+                                    logToAll("Intent is null, trying to get from activity")
+                                }
                                 
                                 if (!isMainActivity(activity, intent)) {
                                     logToAll("Not a main activity, skipping")
@@ -186,13 +224,19 @@ class XposedHook : IXposedHookLoadPackage {
                                 
                                 logToAll("Replacing UI via ActivityThread hook")
                                 
-                                activity.window.decorView.post {
-                                    try {
-                                        replaceActivityUI(activity, prefs)
-                                    } catch (e: Exception) {
-                                        logToAll("Failed to replace UI: ${e.message}")
-                                        e.printStackTrace()
+                                // 检查是否已经替换过，避免重复替换
+                                val uiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
+                                if (!uiReplaced) {
+                                    activity.window.decorView.post {
+                                        try {
+                                            replaceActivityUI(activity, prefs)
+                                        } catch (e: Exception) {
+                                            logToAll("Failed to replace UI: ${e.message}")
+                                            e.printStackTrace()
+                                        }
                                     }
+                                } else {
+                                    logToAll("UI already replaced, skipping")
                                 }
                             } catch (e: Exception) {
                                 logToAll("Error in performLaunchActivity hook: ${e.message}")
