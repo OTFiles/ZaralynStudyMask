@@ -36,17 +36,20 @@ class GradeAdapter(
 
     inner class GradeViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val gradeName: TextView = itemView.findViewById(R.id.gradeName)
-        private val gradeContent: LinearLayout = itemView.findViewById(R.id.gradeCardContent)
+        private val cardView: androidx.cardview.widget.CardView = itemView.findViewById(R.id.cardView)
+        private val gradeIcon: android.widget.ImageView = itemView.findViewById(R.id.gradeIcon)
 
         fun bind(grade: Grade, isSelected: Boolean) {
             gradeName.text = grade.displayName
 
             if (isSelected) {
-                gradeContent.setBackgroundColor(itemView.context.getColor(R.color.md_theme_primary))
+                cardView.setCardBackgroundColor(itemView.context.getColor(R.color.md_theme_primary))
                 gradeName.setTextColor(itemView.context.getColor(R.color.white))
+                gradeIcon.setColorFilter(itemView.context.getColor(R.color.white))
             } else {
-                gradeContent.setBackgroundColor(itemView.context.getColor(R.color.gray_light))
+                cardView.setCardBackgroundColor(itemView.context.getColor(R.color.md_theme_surfaceContainer))
                 gradeName.setTextColor(itemView.context.getColor(R.color.text_primary))
+                gradeIcon.setColorFilter(itemView.context.getColor(R.color.md_theme_primary))
             }
 
             itemView.setOnClickListener {

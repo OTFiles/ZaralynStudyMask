@@ -53,9 +53,6 @@ class HomeFragment : Fragment() {
         )
 
         binding.gradeContainer.removeAllViews()
-        Grade.GRADE_10.value = 10
-        Grade.GRADE_11.value = 11
-        Grade.GRADE_12.value = 12
 
         for (grade in listOf(Grade.GRADE_10, Grade.GRADE_11, Grade.GRADE_12)) {
             val gradeView = createGradeView(grade)
