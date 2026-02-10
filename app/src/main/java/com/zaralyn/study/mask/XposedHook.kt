@@ -1295,61 +1295,145 @@ class XposedHook : IXposedHookLoadPackage {
     // 设置按键监听
     private fun setupKeyListener(activity: Activity, prefs: android.content.SharedPreferences) {
         try {
-            // 使用反射获取Activity的dispatchKeyEvent方法并Hook
-            val activityClass = activity.javaClass
+            logToAll("Setting up key listener for ${activity.javaClass.name}")
             
-            XposedHelpers.findAndHookMethod(
-                activityClass,
-                "dispatchKeyEvent",
-                android.view.KeyEvent::class.java,
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val event = param.args[0] as android.view.KeyEvent
-                        
-                        if (event.action == android.view.KeyEvent.ACTION_DOWN) {
-                            val keyCode = event.keyCode
-                            
-                            if (keyCode == android.view.KeyEvent.KEYCODE_F10 || 
-                                keyCode == android.view.KeyEvent.KEYCODE_MENU) {
-                                logToAll("F10/MENU key pressed")
-                                launchOriginalApp(activity, prefs)
-                                param.result = true
+            // 使用更安全的Hook方式，避免NoSuchMethodError
+            var hookSuccess = false
+            
+            // 方法1：尝试在当前类中查找并Hook dispatchKeyEvent
+            try {
+                XposedHelpers.findAndHookMethod(
+                    activity.javaClass,
+                    "dispatchKeyEvent",
+                    android.view.KeyEvent::class.java,
+                    object : XC_MethodHook() {
+                        override fun afterHookedMethod(param: MethodHookParam) {
+                            // 只处理目标Activity实例
+                            if (param.thisObject != activity) {
                                 return
                             }
                             
-                            if (keyCode == android.view.KeyEvent.KEYCODE_HOME) {
-                                val currentTime = System.currentTimeMillis()
-                                val lastClickTime = prefs.getLong(KEY_LAST_CLICK_TIME, 0)
-                                val clickCount = prefs.getInt(KEY_CLICK_COUNT, 0)
+                            val event = param.args[0] as android.view.KeyEvent
+                            
+                            if (event.action == android.view.KeyEvent.ACTION_DOWN) {
+                                val keyCode = event.keyCode
                                 
-                                if (currentTime - lastClickTime < 2000) {
-                                    val newClickCount = clickCount + 1
-                                    prefs.edit()
-                                        .putInt(KEY_CLICK_COUNT, newClickCount)
-                                        .putLong(KEY_LAST_CLICK_TIME, currentTime)
-                                        .apply()
+                                if (keyCode == android.view.KeyEvent.KEYCODE_F10 || 
+                                    keyCode == android.view.KeyEvent.KEYCODE_MENU) {
+                                    logToAll("F10/MENU key pressed")
+                                    launchOriginalApp(activity, prefs)
+                                    param.result = true
+                                    return
+                                }
+                                
+                                if (keyCode == android.view.KeyEvent.KEYCODE_HOME) {
+                                    val currentTime = System.currentTimeMillis()
+                                    val lastClickTime = prefs.getLong(KEY_LAST_CLICK_TIME, 0)
+                                    val clickCount = prefs.getInt(KEY_CLICK_COUNT, 0)
                                     
-                                    logToAll("Home click count: $newClickCount")
-                                    
-                                    if (newClickCount >= 5) {
-                                        logToAll("5 home clicks detected, launching original app")
-                                        launchOriginalApp(activity, prefs)
-                                        prefs.edit().putInt(KEY_CLICK_COUNT, 0).apply()
+                                    if (currentTime - lastClickTime < 2000) {
+                                        val newClickCount = clickCount + 1
+                                        prefs.edit()
+                                            .putInt(KEY_CLICK_COUNT, newClickCount)
+                                            .putLong(KEY_LAST_CLICK_TIME, currentTime)
+                                            .apply()
+                                        
+                                        logToAll("Home click count: $newClickCount")
+                                        
+                                        if (newClickCount >= 5) {
+                                            logToAll("5 home clicks detected, launching original app")
+                                            launchOriginalApp(activity, prefs)
+                                            prefs.edit().putInt(KEY_CLICK_COUNT, 0).apply()
+                                        }
+                                    } else {
+                                        prefs.edit()
+                                            .putInt(KEY_CLICK_COUNT, 1)
+                                            .putLong(KEY_LAST_CLICK_TIME, currentTime)
+                                            .apply()
+                                        logToAll("Home click count reset to 1")
                                     }
-                                } else {
-                                    prefs.edit()
-                                        .putInt(KEY_CLICK_COUNT, 1)
-                                        .putLong(KEY_LAST_CLICK_TIME, currentTime)
-                                        .apply()
-                                    logToAll("Home click count reset to 1")
                                 }
                             }
                         }
                     }
-                }
-            )
+                )
+                hookSuccess = true
+                logToAll("Successfully hooked dispatchKeyEvent in ${activity.javaClass.name}")
+            } catch (e: NoSuchMethodError) {
+                logToAll("dispatchKeyEvent not found in ${activity.javaClass.name}, trying parent class")
+            }
             
-            logToAll("Key listener setup completed")
+            // 方法2：如果当前类没有，尝试在父类中Hook
+            if (!hookSuccess) {
+                try {
+                    val activityClass = Activity::class.java
+                    XposedHelpers.findAndHookMethod(
+                        activityClass,
+                        "dispatchKeyEvent",
+                        android.view.KeyEvent::class.java,
+                        object : XC_MethodHook() {
+                            override fun afterHookedMethod(param: MethodHookParam) {
+                                // 只处理目标Activity实例
+                                if (param.thisObject != activity) {
+                                    return
+                                }
+                                
+                                val event = param.args[0] as android.view.KeyEvent
+                                
+                                if (event.action == android.view.KeyEvent.ACTION_DOWN) {
+                                    val keyCode = event.keyCode
+                                    
+                                    if (keyCode == android.view.KeyEvent.KEYCODE_F10 || 
+                                        keyCode == android.view.KeyEvent.KEYCODE_MENU) {
+                                        logToAll("F10/MENU key pressed")
+                                        launchOriginalApp(activity, prefs)
+                                        param.result = true
+                                        return
+                                    }
+                                    
+                                    if (keyCode == android.view.KeyEvent.KEYCODE_HOME) {
+                                        val currentTime = System.currentTimeMillis()
+                                        val lastClickTime = prefs.getLong(KEY_LAST_CLICK_TIME, 0)
+                                        val clickCount = prefs.getInt(KEY_CLICK_COUNT, 0)
+                                        
+                                        if (currentTime - lastClickTime < 2000) {
+                                            val newClickCount = clickCount + 1
+                                            prefs.edit()
+                                                .putInt(KEY_CLICK_COUNT, newClickCount)
+                                                .putLong(KEY_LAST_CLICK_TIME, currentTime)
+                                                .apply()
+                                            
+                                            logToAll("Home click count: $newClickCount")
+                                            
+                                            if (newClickCount >= 5) {
+                                                logToAll("5 home clicks detected, launching original app")
+                                                launchOriginalApp(activity, prefs)
+                                                prefs.edit().putInt(KEY_CLICK_COUNT, 0).apply()
+                                            }
+                                        } else {
+                                            prefs.edit()
+                                                .putInt(KEY_CLICK_COUNT, 1)
+                                                .putLong(KEY_LAST_CLICK_TIME, currentTime)
+                                                .apply()
+                                            logToAll("Home click count reset to 1")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    )
+                    hookSuccess = true
+                    logToAll("Successfully hooked dispatchKeyEvent in parent Activity class")
+                } catch (e: Exception) {
+                    logToAll("Failed to hook dispatchKeyEvent in parent class: ${e.message}")
+                }
+            }
+            
+            if (hookSuccess) {
+                logToAll("Key listener setup completed")
+            } else {
+                logToAll("Warning: Failed to setup key listener, manual entry may not work")
+            }
         } catch (e: Exception) {
             logToAll("Failed to setup key listener: ${e.message}")
             e.printStackTrace()
