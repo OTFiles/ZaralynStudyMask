@@ -24,6 +24,7 @@ import java.util.Locale
 class XposedHook : IXposedHookLoadPackage {
 
     companion object {
+        private const val TAG = "ZaralynStudyMask"
         private const val PREFS_NAME = "ZaralynStudyMask"
         private const val KEY_SHOW_ORIGINAL = "show_original_app"
         private const val KEY_CLICK_COUNT = "home_click_count"
@@ -34,7 +35,6 @@ class XposedHook : IXposedHookLoadPackage {
 
     private var mainActivityClass: String? = null
     private var packageName: String = ""
-    private const val TAG = "ZaralynStudyMask"
 
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
         packageName = lpparam.packageName
