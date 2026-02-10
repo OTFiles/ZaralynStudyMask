@@ -31,9 +31,6 @@ class XposedHook : IXposedHookLoadPackage {
         private const val KEY_LAST_CLICK_TIME = "last_click_time"
         private const val KEY_UI_REPLACED = "ui_replaced"
         private const val KEY_MAIN_ACTIVITY = "main_activity"
-        
-        // 目标应用包名，从 patch.json 中获取
-        private const val TARGET_PACKAGE = "com.target.app"
     }
 
     private var mainActivityClass: String? = null
@@ -42,8 +39,8 @@ class XposedHook : IXposedHookLoadPackage {
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
         val loadedPackageName = lpparam.packageName
         
-        // 只处理目标包
-        if (loadedPackageName != TARGET_PACKAGE) {
+        // 过滤系统关键进程，避免影响系统稳定性
+        if (isSystemProcess(loadedPackageName)) {
             return
         }
         
@@ -98,14 +95,13 @@ class XposedHook : IXposedHookLoadPackage {
     // 方案1: ActivityThread Hook 法
     private fun hookActivityThread(classLoader: ClassLoader) {
         try {
+            // Android 10+ 使用新的方法签名（2个参数）
             XposedHelpers.findAndHookMethod(
                 "android.app.ActivityThread",
                 classLoader,
                 "performLaunchActivity",
                 "android.app.ActivityThread\$ActivityClientRecord",
                 Intent::class.java,
-                String::class.java,
-                Bundle::class.java,
                 object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
                         try {
@@ -149,6 +145,67 @@ class XposedHook : IXposedHookLoadPackage {
                     }
                 }
             )
+            logToAll("Hooked performLaunchActivity (Android 10+ signature)")
+        } catch (e: NoSuchMethodError) {
+            logToAll("Android 10+ signature not found, trying legacy signature...")
+            // 尝试旧版本签名（4个参数），用于 Android 9 及以下
+            try {
+                XposedHelpers.findAndHookMethod(
+                    "android.app.ActivityThread",
+                    classLoader,
+                    "performLaunchActivity",
+                    "android.app.ActivityThread\$ActivityClientRecord",
+                    Intent::class.java,
+                    String::class.java,
+                    Bundle::class.java,
+                    object : XC_MethodHook() {
+                        override fun afterHookedMethod(param: MethodHookParam) {
+                            try {
+                                val activity = XposedHelpers.getObjectField(param.result, "activity") as Activity
+                                val activityClassName = activity.javaClass.name
+                                val intent = param.args[1] as Intent
+                                
+                                logToAll("Activity launched: $activityClassName")
+                                logToAll("Intent action: ${intent.action}, flags: ${intent.flags}")
+                                logToAll("Intent categories: ${intent.categories?.joinToString()}")
+                                
+                                if (!isMainActivity(activity, intent)) {
+                                    logToAll("Not a main activity, skipping")
+                                    return
+                                }
+                                
+                                logToAll("=== MAIN ACTIVITY DETECTED: $activityClassName ===")
+                                
+                                val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                                val showOriginal = prefs.getBoolean(KEY_SHOW_ORIGINAL, false)
+                                
+                                if (showOriginal) {
+                                    logToAll("Showing original app")
+                                    return
+                                }
+                                
+                                logToAll("Replacing UI via ActivityThread hook")
+                                
+                                activity.window.decorView.post {
+                                    try {
+                                        replaceActivityUI(activity, prefs)
+                                    } catch (e: Exception) {
+                                        logToAll("Failed to replace UI: ${e.message}")
+                                        e.printStackTrace()
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                logToAll("Error in performLaunchActivity hook: ${e.message}")
+                                e.printStackTrace()
+                            }
+                        }
+                    }
+                )
+                logToAll("Hooked performLaunchActivity (legacy signature)")
+            } catch (e2: Exception) {
+                logToAll("Failed to hook ActivityThread with legacy signature: ${e2.message}")
+                e2.printStackTrace()
+            }
         } catch (e: Exception) {
             logToAll("Failed to hook ActivityThread: ${e.message}")
             e.printStackTrace()
@@ -408,7 +465,29 @@ class XposedHook : IXposedHookLoadPackage {
         try {
             val activityThreadClass = XposedHelpers.findClass("android.app.ActivityThread", classLoader)
             val currentActivityThread = XposedHelpers.callStaticMethod(activityThreadClass, "currentActivityThread")
-            val context = XposedHelpers.getObjectField(currentActivityThread, "mSystemContext") as Context
+            
+            // 使用安全转换，避免 NullPointerException
+            var context: Context? = null
+            
+            // 尝试获取 mSystemContext
+            val systemContext = XposedHelpers.getObjectField(currentActivityThread, "mSystemContext")
+            if (systemContext is Context) {
+                context = systemContext
+            }
+            
+            // 如果获取失败，尝试获取 mInitialApplication
+            if (context == null) {
+                val initialApp = XposedHelpers.getObjectField(currentActivityThread, "mInitialApplication")
+                if (initialApp is Context) {
+                    context = initialApp
+                }
+            }
+            
+            // 如果仍然获取失败，直接返回 null，避免崩溃
+            if (context == null) {
+                logToAll("Warning: Could not get Context from ActivityThread")
+                return null
+            }
             
             // 方法1: PackageManager.getLaunchIntentForPackage()
             val packageManager = context.packageManager
@@ -755,5 +834,48 @@ class XposedHook : IXposedHookLoadPackage {
         val intent = activity.intent
         activity.finish()
         activity.startActivity(intent)
+    }
+    
+    // 检查是否是系统关键进程
+    private fun isSystemProcess(packageName: String): Boolean {
+        // 过滤系统框架
+        if (packageName.startsWith("android.")) {
+            return true
+        }
+        
+        // 过滤系统应用
+        val systemPackages = listOf(
+            "com.android.systemui",
+            "com.android.settings",
+            "com.android.phone",
+            "com.android.mms",
+            "com.android.browser",
+            "com.android.contacts",
+            "com.android.gallery3d",
+            "com.android.camera",
+            "com.android.calendar",
+            "com.android.providers",
+            "com.android.certinstaller",
+            "com.android.inputmethod",
+            "com.android.launcher",
+            "com.android.packageinstaller",
+            "com.android.server",
+            "com.android.shell",
+            "com.android.vending"
+        )
+        
+        if (systemPackages.any { packageName.startsWith(it) }) {
+            return true
+        }
+        
+        // 过滤 Xposed/LSPosed/NPatch 框架本身
+        if (packageName.startsWith("de.robv.android.xposed") ||
+            packageName.startsWith("org.lsposed") ||
+            packageName.startsWith("io.github.lsposed") ||
+            packageName.startsWith("com.zaralyn.study.mask")) {
+            return true
+        }
+        
+        return false
     }
 }
