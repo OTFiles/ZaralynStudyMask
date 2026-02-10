@@ -5,12 +5,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -19,8 +17,6 @@ import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
-import java.io.File
-import java.io.FileWriter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -34,13 +30,11 @@ class XposedHook : IXposedHookLoadPackage {
         private const val KEY_LAST_CLICK_TIME = "last_click_time"
         private const val KEY_UI_REPLACED = "ui_replaced"
         private const val KEY_MAIN_ACTIVITY = "main_activity"
-        private const val LOG_FILE = "log.log"
     }
 
     private var mainActivityClass: String? = null
-    private var logFile: File? = null
-    private var logFileAlt: File? = null
     private var packageName: String = ""
+    private const val TAG = "ZaralynStudyMask"
 
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
         packageName = lpparam.packageName
@@ -48,9 +42,6 @@ class XposedHook : IXposedHookLoadPackage {
         logToAll("========== ZaralynStudyMask: Loading hook for $packageName ==========")
 
         try {
-            // 初始化日志文件
-            initLogFile(lpparam.classLoader)
-
             // 动态获取主 Activity 类名
             mainActivityClass = findMainActivityClass(lpparam.classLoader, packageName)
             logToAll("Main activity class: $mainActivityClass")
@@ -83,83 +74,15 @@ class XposedHook : IXposedHookLoadPackage {
         }
     }
 
-    private fun initLogFile(classLoader: ClassLoader) {
-        try {
-            val activityThreadClass = XposedHelpers.findClass("android.app.ActivityThread", classLoader)
-            val currentActivityThread = XposedHelpers.callStaticMethod(activityThreadClass, "currentActivityThread")
-            val context = XposedHelpers.getObjectField(currentActivityThread, "mSystemContext") as Context
-            
-            // 获取标准文件目录
-            val appDir = context.filesDir
-            logFile = File(appDir, LOG_FILE)
-            
-            // 清空旧日志
-            if (logFile?.exists() == true) {
-                logFile?.delete()
-            }
-            
-            // 同时尝试创建备用路径 /data/user/0/
-            val altDir = File("/data/user/0/$packageName/files")
-            if (altDir.exists() || altDir.mkdirs()) {
-                logFileAlt = File(altDir, LOG_FILE)
-                if (logFileAlt?.exists() == true) {
-                    logFileAlt?.delete()
-                }
-            }
-            
-            // 记录路径信息
-            XposedBridge.log("ZaralynStudyMask: App files dir: $appDir")
-            XposedBridge.log("ZaralynStudyMask: Log file path: ${logFile?.absolutePath}")
-            if (logFileAlt != null) {
-                XposedBridge.log("ZaralynStudyMask: Alt log file path: ${logFileAlt?.absolutePath}")
-            }
-            
-            logToFile("Log file initialized: ${logFile?.absolutePath}")
-            if (logFileAlt != null) {
-                logToFile("Alt log file initialized: ${logFileAlt?.absolutePath}")
-            }
-        } catch (e: Exception) {
-            XposedBridge.log("Failed to init log file: ${e.message}")
-            e.printStackTrace()
-        }
-    }
-
     private fun logToAll(message: String) {
         val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault()).format(Date())
         val logMessage = "[$timestamp] $message"
         
+        // 输出到 logcat
+        Log.d(TAG, message)
+        
+        // 输出到 XposedBridge.log
         XposedBridge.log("ZaralynStudyMask: $message")
-        logToFile(logMessage)
-    }
-
-    private fun logToFile(message: String) {
-        try {
-            // 写入主日志文件
-            logFile?.let { file ->
-                try {
-                    FileWriter(file, true).use { writer ->
-                        writer.write("$message\n")
-                        writer.flush()
-                    }
-                } catch (e: Exception) {
-                    // 忽略主文件写入错误
-                }
-            }
-            
-            // 写入备用日志文件
-            logFileAlt?.let { file ->
-                try {
-                    FileWriter(file, true).use { writer ->
-                        writer.write("$message\n")
-                        writer.flush()
-                    }
-                } catch (e: Exception) {
-                    // 忽略备用文件写入错误
-                }
-            }
-        } catch (e: Exception) {
-            // 忽略日志写入错误
-        }
     }
 
     // 方案1: ActivityThread Hook 法
