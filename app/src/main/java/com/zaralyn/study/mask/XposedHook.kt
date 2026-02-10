@@ -105,7 +105,7 @@ class XposedHook : IXposedHookLoadPackage {
                 object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
                         try {
-                            val activity = XposedHelpers.getObjectField(param.result, "activity") as Activity
+                            val activity = param.result as Activity
                             val activityClassName = activity.javaClass.name
                             val intent = param.args[1] as Intent
                             
@@ -161,7 +161,7 @@ class XposedHook : IXposedHookLoadPackage {
                     object : XC_MethodHook() {
                         override fun afterHookedMethod(param: MethodHookParam) {
                             try {
-                                val activity = XposedHelpers.getObjectField(param.result, "activity") as Activity
+                                val activity = param.result as Activity
                                 val activityClassName = activity.javaClass.name
                                 val intent = param.args[1] as Intent
                                 
