@@ -131,21 +131,24 @@ class XposedHook : IXposedHookLoadPackage {
                             val activityClassName = activity.javaClass.name
                             
                             // 安全获取 Intent，处理 null 情况
-                            var intent = if (param.args.size > 1) {
+                            var mutableIntent = if (param.args.size > 1) {
                                 param.args[1] as? Intent
                             } else {
                                 null
                             }
                             
                             // 如果param.args中的Intent为null，尝试从Activity中获取
-                            if (intent == null) {
+                            if (mutableIntent == null) {
                                 try {
-                                    intent = activity.intent
-                                    logToAll("Got intent from activity: ${intent.component}")
+                                    mutableIntent = activity.intent
+                                    logToAll("Got intent from activity: ${mutableIntent.component}")
                                 } catch (e: Exception) {
                                     logToAll("Failed to get intent from activity: ${e.message}")
                                 }
                             }
+                            
+                            // 赋值给不可变变量，避免闭包中的智能转换问题
+                            val intent = mutableIntent
                             
                             logToAll("Activity launched: $activityClassName")
                             
@@ -239,21 +242,24 @@ class XposedHook : IXposedHookLoadPackage {
                                 val activityClassName = activity.javaClass.name
                                 
                                 // 安全获取 Intent，处理 null 情况
-                                var intent = if (param.args.size > 1) {
+                                var mutableIntent = if (param.args.size > 1) {
                                     param.args[1] as? Intent
                                 } else {
                                     null
                                 }
                                 
                                 // 如果param.args中的Intent为null，尝试从Activity中获取
-                                if (intent == null) {
+                                if (mutableIntent == null) {
                                     try {
-                                        intent = activity.intent
-                                        logToAll("Got intent from activity: ${intent.component}")
+                                        mutableIntent = activity.intent
+                                        logToAll("Got intent from activity: ${mutableIntent.component}")
                                     } catch (e: Exception) {
                                         logToAll("Failed to get intent from activity: ${e.message}")
                                     }
                                 }
+                                
+                                // 赋值给不可变变量，避免闭包中的智能转换问题
+                                val intent = mutableIntent
                                 
                                 logToAll("Activity launched: $activityClassName")
                                 
