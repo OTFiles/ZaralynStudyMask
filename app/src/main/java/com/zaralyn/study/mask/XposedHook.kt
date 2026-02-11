@@ -371,8 +371,8 @@ class XposedHook : IXposedHookLoadPackage {
                             
                             logToAll("Replacing UI via setContentView(int) hook")
                             
-                            val newUI = createMaskUI(activity, prefs)
-                            activity.setContentView(newUI)
+                            // 调用replaceActivityUI函数，这样可以正确处理NativeActivity
+                            replaceActivityUI(activity, prefs)
                             param.setResult(null)
                         } catch (e: Exception) {
                             logToAll("Error in setContentView(int) hook: ${e.message}")
@@ -409,15 +409,14 @@ class XposedHook : IXposedHookLoadPackage {
                             val showOriginal = prefs.getBoolean(KEY_SHOW_ORIGINAL, false)
                             
                             if (showOriginal) {
-                                return
-                            }
-                            
-                            logToAll("Replacing UI via setContentView(View) hook")
-                            
-                            val newUI = createMaskUI(activity, prefs)
-                            activity.setContentView(newUI)
-                            param.setResult(null)
-                        } catch (e: Exception) {
+                                                        return
+                                                    }
+                                                    
+                                                    logToAll("Replacing UI via setContentView(View) hook")
+                                                    
+                                                    // 调用replaceActivityUI函数，这样可以正确处理NativeActivity
+                                                    replaceActivityUI(activity, prefs)
+                                                    param.setResult(null)                        } catch (e: Exception) {
                             logToAll("Error in setContentView(View) hook: ${e.message}")
                             e.printStackTrace()
                         }
@@ -468,11 +467,10 @@ class XposedHook : IXposedHookLoadPackage {
                             }
                             
                             logToAll("Replacing UI via PhoneWindow hook")
-                            
-                            val newUI = createMaskUI(activity, prefs)
-                            activity.setContentView(newUI)
-                            param.setResult(null)
-                        } catch (e: Exception) {
+                                                    
+                                                    // 调用replaceActivityUI函数，这样可以正确处理NativeActivity
+                                                    replaceActivityUI(activity, prefs)
+                                                    param.setResult(null)                        } catch (e: Exception) {
                             logToAll("Error in PhoneWindow hook: ${e.message}")
                             e.printStackTrace()
                         }
@@ -537,10 +535,10 @@ class XposedHook : IXposedHookLoadPackage {
                             
                             logToAll("Replacing UI via DecorView hook")
                             
+                            // 调用replaceActivityUI函数，这样可以正确处理NativeActivity
                             activity.window.decorView.post {
                                 try {
-                                    val newUI = createMaskUI(activity, prefs)
-                                    activity.setContentView(newUI)
+                                    replaceActivityUI(activity, prefs)
                                 } catch (e: Exception) {
                                     logToAll("Failed to replace UI via DecorView: ${e.message}")
                                     e.printStackTrace()
@@ -714,11 +712,24 @@ class XposedHook : IXposedHookLoadPackage {
         
         try {
             // 检查是否是 NativeActivity，如果是则使用 WindowManager 覆盖方案
-            val isNativeActivity = activity.javaClass.name == "android.app.NativeActivity" ||
+            var isNativeActivity = activity.javaClass.name == "android.app.NativeActivity" ||
                                    activity.javaClass.superclass?.name == "android.app.NativeActivity"
             
+            // 检查是否包含 NativeContentView（用于检测游戏类Activity）
+            if (!isNativeActivity) {
+                val decorView = activity.window.decorView
+                val contentView = decorView.findViewById<ViewGroup>(android.R.id.content)
+                if (contentView != null && contentView.childCount > 0) {
+                    val originalView = contentView.getChildAt(0)
+                    if (originalView != null && originalView.javaClass.name.contains("NativeContentView")) {
+                        isNativeActivity = true
+                        logToAll("Detected NativeContentView, using NativeActivity method")
+                    }
+                }
+            }
+            
             if (isNativeActivity) {
-                logToAll("Detected NativeActivity, using WindowManager overlay method")
+                logToAll("Detected NativeActivity (class: ${activity.javaClass.name}), using WindowManager overlay method")
                 replaceNativeActivityUI(activity, prefs)
                 return
             }
