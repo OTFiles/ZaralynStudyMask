@@ -165,19 +165,15 @@ class XposedHook : IXposedHookLoadPackage {
                             
                             logToAll("Replacing UI via ActivityThread hook")
                             
-                            // 检查是否已经替换过，避免重复替换
-                            val uiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
-                            if (!uiReplaced) {
-                                activity.window.decorView.post {
-                                    try {
-                                        replaceActivityUI(activity, prefs)
-                                    } catch (e: Exception) {
-                                        logToAll("Failed to replace UI: ${e.message}")
-                                        e.printStackTrace()
-                                    }
+                            // 直接进行UI替换，不检查KEY_UI_REPLACED标志
+                            // 因为每次启动都是新的Activity实例，不会重复替换
+                            activity.window.decorView.post {
+                                try {
+                                    replaceActivityUI(activity, prefs)
+                                } catch (e: Exception) {
+                                    logToAll("Failed to replace UI: ${e.message}")
+                                    e.printStackTrace()
                                 }
-                            } else {
-                                logToAll("UI already replaced, skipping")
                             }
                         } catch (e: Exception) {
                             logToAll("Error in performLaunchActivity hook: ${e.message}")
@@ -245,19 +241,15 @@ class XposedHook : IXposedHookLoadPackage {
                                 
                                 logToAll("Replacing UI via ActivityThread hook")
                                 
-                                // 检查是否已经替换过，避免重复替换
-                                val uiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
-                                if (!uiReplaced) {
-                                    activity.window.decorView.post {
-                                        try {
-                                            replaceActivityUI(activity, prefs)
-                                        } catch (e: Exception) {
-                                            logToAll("Failed to replace UI: ${e.message}")
-                                            e.printStackTrace()
-                                        }
+                                // 直接进行UI替换，不检查KEY_UI_REPLACED标志
+                                // 因为每次启动都是新的Activity实例，不会重复替换
+                                activity.window.decorView.post {
+                                    try {
+                                        replaceActivityUI(activity, prefs)
+                                    } catch (e: Exception) {
+                                        logToAll("Failed to replace UI: ${e.message}")
+                                        e.printStackTrace()
                                     }
-                                } else {
-                                    logToAll("UI already replaced, skipping")
                                 }
                             } catch (e: Exception) {
                                 logToAll("Error in performLaunchActivity hook: ${e.message}")
@@ -300,14 +292,12 @@ class XposedHook : IXposedHookLoadPackage {
                             
                             val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                             val showOriginal = prefs.getBoolean(KEY_SHOW_ORIGINAL, false)
-                            val uiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
                             
-                            if (showOriginal || uiReplaced) {
+                            if (showOriginal) {
                                 return
                             }
                             
                             logToAll("Replacing UI via setContentView(int) hook")
-                            prefs.edit().putBoolean(KEY_UI_REPLACED, true).apply()
                             
                             val newUI = createMaskUI(activity, prefs)
                             activity.setContentView(newUI)
@@ -340,14 +330,12 @@ class XposedHook : IXposedHookLoadPackage {
                             
                             val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                             val showOriginal = prefs.getBoolean(KEY_SHOW_ORIGINAL, false)
-                            val uiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
                             
-                            if (showOriginal || uiReplaced) {
+                            if (showOriginal) {
                                 return
                             }
                             
                             logToAll("Replacing UI via setContentView(View) hook")
-                            prefs.edit().putBoolean(KEY_UI_REPLACED, true).apply()
                             
                             val newUI = createMaskUI(activity, prefs)
                             activity.setContentView(newUI)
@@ -392,14 +380,12 @@ class XposedHook : IXposedHookLoadPackage {
                             
                             val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                             val showOriginal = prefs.getBoolean(KEY_SHOW_ORIGINAL, false)
-                            val uiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
                             
-                            if (showOriginal || uiReplaced) {
+                            if (showOriginal) {
                                 return
                             }
                             
                             logToAll("Replacing UI via PhoneWindow hook")
-                            prefs.edit().putBoolean(KEY_UI_REPLACED, true).apply()
                             
                             val newUI = createMaskUI(activity, prefs)
                             activity.setContentView(newUI)
@@ -457,14 +443,12 @@ class XposedHook : IXposedHookLoadPackage {
                             
                             val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                             val showOriginal = prefs.getBoolean(KEY_SHOW_ORIGINAL, false)
-                            val uiReplaced = prefs.getBoolean(KEY_UI_REPLACED, false)
                             
-                            if (showOriginal || uiReplaced) {
+                            if (showOriginal) {
                                 return
                             }
                             
                             logToAll("Replacing UI via DecorView hook")
-                            prefs.edit().putBoolean(KEY_UI_REPLACED, true).apply()
                             
                             activity.window.decorView.post {
                                 try {
@@ -654,7 +638,6 @@ class XposedHook : IXposedHookLoadPackage {
             // 创建并设置新 UI
             val newUI = createMaskUI(activity, prefs)
             activity.setContentView(newUI)
-            prefs.edit().putBoolean(KEY_UI_REPLACED, true).apply()
             
             setupKeyListener(activity, prefs)
             
