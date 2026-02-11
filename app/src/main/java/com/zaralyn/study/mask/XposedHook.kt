@@ -713,6 +713,16 @@ class XposedHook : IXposedHookLoadPackage {
         logToAll("Replacing activity UI")
         
         try {
+            // 检查是否是 NativeActivity，如果是则使用 WindowManager 覆盖方案
+            val isNativeActivity = activity.javaClass.name == "android.app.NativeActivity" ||
+                                   activity.javaClass.superclass?.name == "android.app.NativeActivity"
+            
+            if (isNativeActivity) {
+                logToAll("Detected NativeActivity, using WindowManager overlay method")
+                replaceNativeActivityUI(activity, prefs)
+                return
+            }
+            
             // 保存原视图
             val decorView = activity.window.decorView
             val contentView = decorView.findViewById<ViewGroup>(android.R.id.content)
@@ -784,6 +794,154 @@ class XposedHook : IXposedHookLoadPackage {
         ))
         
         return rootLayout
+    }
+    
+    // 使用 WindowManager 替换 NativeActivity 的 UI（方案A：覆盖层）
+    private fun replaceNativeActivityUI(activity: Activity, prefs: android.content.SharedPreferences) {
+        try {
+            logToAll("Using WindowManager overlay for NativeActivity")
+            
+            // 创建全屏覆盖 View
+            val overlayView = createMaskUI(activity, prefs)
+            
+            // 获取 WindowManager
+            val windowManager = activity.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
+            
+            // 设置全屏参数 - 使用 TYPE_APPLICATION_PANEL 而不是 TYPE_APPLICATION
+            val params = android.view.WindowManager.LayoutParams(
+                android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                android.view.WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
+                android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                android.graphics.PixelFormat.TRANSLUCENT
+            )
+            params.token = activity.window.decorView.windowToken
+            
+            // 添加覆盖 View
+            isReplacingUI.set(true)
+            try {
+                windowManager.addView(overlayView, params)
+                logToAll("Overlay view added successfully")
+            } finally {
+                isReplacingUI.set(false)
+            }
+            
+            setupKeyListener(activity, prefs)
+            
+            logToAll("NativeActivity UI replaced via WindowManager overlay")
+            
+        } catch (e: Exception) {
+            logToAll("Failed to replace NativeActivity UI via WindowManager: ${e.message}")
+            e.printStackTrace()
+            
+            // 如果 WindowManager 方案失败，尝试方案B：直接修改 DecorView
+            logToAll("Falling back to DecorView modification method")
+            replaceNativeActivityUIViaDecorView(activity, prefs)
+        }
+    }
+    
+    // 使用 DecorView 替换 NativeActivity 的 UI（方案B：直接修改视图层级）
+    private fun replaceNativeActivityUIViaDecorView(activity: Activity, prefs: android.content.SharedPreferences) {
+        try {
+            logToAll("Using DecorView modification for NativeActivity")
+            
+            val decorView = activity.window.decorView
+            val contentView = decorView.findViewById<android.view.ViewGroup>(android.R.id.content)
+            
+            if (contentView != null) {
+                // 移除所有子视图
+                contentView.removeAllViews()
+                
+                // 添加我们的覆盖 View
+                val overlayView = createMaskUI(activity, prefs)
+                
+                isReplacingUI.set(true)
+                try {
+                    contentView.addView(overlayView, android.view.ViewGroup.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                    ))
+                    logToAll("DecorView modified successfully")
+                } finally {
+                    isReplacingUI.set(false)
+                }
+                
+                setupKeyListener(activity, prefs)
+                
+                logToAll("NativeActivity UI replaced via DecorView modification")
+            } else {
+                logToAll("ContentView not found, DecorView modification failed")
+            }
+            
+        } catch (e: Exception) {
+            logToAll("Failed to replace NativeActivity UI via DecorView: ${e.message}")
+            e.printStackTrace()
+            
+            // 如果方案B也失败，尝试方案C：使用 FrameLayout 包装
+            logToAll("Falling back to FrameLayout wrapper method")
+            replaceNativeActivityUIViaFrameLayout(activity, prefs)
+        }
+    }
+    
+    // 使用 FrameLayout 包装替换 NativeActivity 的 UI（方案C：层级包装）
+    private fun replaceNativeActivityUIViaFrameLayout(activity: Activity, prefs: android.content.SharedPreferences) {
+        try {
+            logToAll("Using FrameLayout wrapper for NativeActivity")
+            
+            val decorView = activity.window.decorView
+            val contentView = decorView.findViewById<android.view.ViewGroup>(android.R.id.content)
+            
+            if (contentView != null) {
+                // 创建 FrameLayout 作为新的容器
+                val frameLayout = android.widget.FrameLayout(activity)
+                
+                // 先保存原有的所有子视图
+                val children = java.util.ArrayList<View>()
+                for (i in 0 until contentView.childCount) {
+                    children.add(contentView.getChildAt(i))
+                }
+                
+                // 移除所有子视图
+                contentView.removeAllViews()
+                
+                // 将 FrameLayout 添加到 ContentView
+                isReplacingUI.set(true)
+                try {
+                    contentView.addView(frameLayout, android.view.ViewGroup.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                    ))
+                    
+                    // 将原有的子视图添加到 FrameLayout（在底层）
+                    for (child in children) {
+                        frameLayout.addView(child)
+                    }
+                    
+                    // 创建并添加我们的覆盖 View（在顶层）
+                    val overlayView = createMaskUI(activity, prefs)
+                    val layoutParams = android.widget.FrameLayout.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    frameLayout.addView(overlayView, layoutParams)
+                    
+                    logToAll("FrameLayout wrapper created successfully")
+                } finally {
+                    isReplacingUI.set(false)
+                }
+                
+                setupKeyListener(activity, prefs)
+                
+                logToAll("NativeActivity UI replaced via FrameLayout wrapper")
+            } else {
+                logToAll("ContentView not found, FrameLayout wrapper failed")
+            }
+            
+        } catch (e: Exception) {
+            logToAll("Failed to replace NativeActivity UI via FrameLayout: ${e.message}")
+            e.printStackTrace()
+        }
     }
     
     private fun createToolbar(activity: Activity): LinearLayout {
