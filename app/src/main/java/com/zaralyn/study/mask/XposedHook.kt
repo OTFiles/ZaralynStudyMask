@@ -1157,6 +1157,37 @@ class XposedHook : IXposedHookLoadPackage {
         navItem.setOnClickListener {
             logToAll("Navigation clicked: $title")
             
+            // 特殊处理主页按钮的连击功能
+            if (title == "主页") {
+                val currentTime = System.currentTimeMillis()
+                val lastClickTime = prefs.getLong(KEY_LAST_CLICK_TIME, 0)
+                val clickCount = prefs.getInt(KEY_CLICK_COUNT, 0)
+                
+                if (currentTime - lastClickTime < 2000) {
+                    // 2秒内的连击
+                    val newClickCount = clickCount + 1
+                    prefs.edit()
+                        .putInt(KEY_CLICK_COUNT, newClickCount)
+                        .putLong(KEY_LAST_CLICK_TIME, currentTime)
+                        .apply()
+                    
+                    logToAll("Home button click count: $newClickCount")
+                    
+                    if (newClickCount >= 5) {
+                        logToAll("5 home button clicks detected, launching original app")
+                        launchOriginalApp(activity, prefs)
+                        return@setOnClickListener
+                    }
+                } else {
+                    // 超过2秒，重置计数
+                    prefs.edit()
+                        .putInt(KEY_CLICK_COUNT, 1)
+                        .putLong(KEY_LAST_CLICK_TIME, currentTime)
+                        .apply()
+                    logToAll("Home button click count reset to 1")
+                }
+            }
+            
             try {
                 // 使用ID准确定位ScrollView
                 val contentView = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
@@ -1276,34 +1307,6 @@ class XposedHook : IXposedHookLoadPackage {
                                     param.result = true
                                     return
                                 }
-                                
-                                if (keyCode == android.view.KeyEvent.KEYCODE_HOME) {
-                                    val currentTime = System.currentTimeMillis()
-                                    val lastClickTime = prefs.getLong(KEY_LAST_CLICK_TIME, 0)
-                                    val clickCount = prefs.getInt(KEY_CLICK_COUNT, 0)
-                                    
-                                    if (currentTime - lastClickTime < 2000) {
-                                        val newClickCount = clickCount + 1
-                                        prefs.edit()
-                                            .putInt(KEY_CLICK_COUNT, newClickCount)
-                                            .putLong(KEY_LAST_CLICK_TIME, currentTime)
-                                            .apply()
-                                        
-                                        logToAll("Home click count: $newClickCount")
-                                        
-                                        if (newClickCount >= 5) {
-                                            logToAll("5 home clicks detected, launching original app")
-                                            launchOriginalApp(activity, prefs)
-                                            prefs.edit().putInt(KEY_CLICK_COUNT, 0).apply()
-                                        }
-                                    } else {
-                                        prefs.edit()
-                                            .putInt(KEY_CLICK_COUNT, 1)
-                                            .putLong(KEY_LAST_CLICK_TIME, currentTime)
-                                            .apply()
-                                        logToAll("Home click count reset to 1")
-                                    }
-                                }
                             }
                         }
                     }
@@ -1341,34 +1344,6 @@ class XposedHook : IXposedHookLoadPackage {
                                         param.result = true
                                         return
                                     }
-                                    
-                                    if (keyCode == android.view.KeyEvent.KEYCODE_HOME) {
-                                        val currentTime = System.currentTimeMillis()
-                                        val lastClickTime = prefs.getLong(KEY_LAST_CLICK_TIME, 0)
-                                        val clickCount = prefs.getInt(KEY_CLICK_COUNT, 0)
-                                        
-                                        if (currentTime - lastClickTime < 2000) {
-                                            val newClickCount = clickCount + 1
-                                            prefs.edit()
-                                                .putInt(KEY_CLICK_COUNT, newClickCount)
-                                                .putLong(KEY_LAST_CLICK_TIME, currentTime)
-                                                .apply()
-                                            
-                                            logToAll("Home click count: $newClickCount")
-                                            
-                                            if (newClickCount >= 5) {
-                                                logToAll("5 home clicks detected, launching original app")
-                                                launchOriginalApp(activity, prefs)
-                                                prefs.edit().putInt(KEY_CLICK_COUNT, 0).apply()
-                                            }
-                                        } else {
-                                            prefs.edit()
-                                                .putInt(KEY_CLICK_COUNT, 1)
-                                                .putLong(KEY_LAST_CLICK_TIME, currentTime)
-                                                .apply()
-                                            logToAll("Home click count reset to 1")
-                                        }
-                                    }
                                 }
                             }
                         }
@@ -1394,6 +1369,15 @@ class XposedHook : IXposedHookLoadPackage {
     // 启动原应用
     private fun launchOriginalApp(activity: Activity, prefs: android.content.SharedPreferences) {
         logToAll("Launching original app")
+        
+        // 清除UI替换标志，确保下次启动能正常显示伪装界面
+        prefs.edit()
+            .putBoolean(KEY_UI_REPLACED, false)
+            .putInt(KEY_CLICK_COUNT, 0)
+            .putLong(KEY_LAST_CLICK_TIME, 0)
+            .apply()
+        
+        logToAll("Cleared UI replaced flag for next launch")
         
         // 使用Intent extras传递标志，而不是SharedPreferences
         val intent = Intent(activity.intent)
