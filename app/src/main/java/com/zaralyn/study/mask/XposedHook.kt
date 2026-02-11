@@ -155,11 +155,33 @@ class XposedHook : IXposedHookLoadPackage {
                             
                             val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                             
-                            // 检查Intent extras中是否有show_original_app标志
-                            val showOriginalFromIntent = intent?.getBooleanExtra("show_original_app", false) ?: false
+                            // 多重检查：确定是否应该显示原应用
+                            var shouldShowOriginal = false
                             
-                            if (showOriginalFromIntent) {
-                                logToAll("show_original_app flag found in intent, showing original app")
+                            // 检查1: Intent extras中的show_original_app标志
+                            if (intent != null) {
+                                logToAll("Checking intent extras...")
+                                val showOriginalFromIntent = intent.getBooleanExtra("show_original_app", false)
+                                logToAll("Intent show_original_app flag: $showOriginalFromIntent")
+                                shouldShowOriginal = shouldShowOriginal || showOriginalFromIntent
+                                
+                                // 检查2: Intent flags - 如果是FLAG_ACTIVITY_CLEAR_TASK，可能是用户想要重新启动
+                                val flags = intent.flags
+                                val isClearTask = (flags and Intent.FLAG_ACTIVITY_CLEAR_TASK) != 0
+                                logToAll("Intent flags: $flags, isClearTask: $isClearTask")
+                                
+                                // 检查3: 所有extras，用于调试
+                                if (intent.extras != null) {
+                                    logToAll("Intent extras keys: ${intent.extras!!.keySet().joinToString()}")
+                                } else {
+                                    logToAll("Intent extras is null")
+                                }
+                            } else {
+                                logToAll("Intent is null, trying to get from activity")
+                            }
+                            
+                            if (shouldShowOriginal) {
+                                logToAll("Detected request to show original app, skipping UI replacement")
                                 return
                             }
                             
@@ -231,11 +253,33 @@ class XposedHook : IXposedHookLoadPackage {
                                 
                                 val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                                 
-                                // 检查Intent extras中是否有show_original_app标志
-                                val showOriginalFromIntent = intent?.getBooleanExtra("show_original_app", false) ?: false
+                                // 多重检查：确定是否应该显示原应用
+                                var shouldShowOriginal = false
                                 
-                                if (showOriginalFromIntent) {
-                                    logToAll("show_original_app flag found in intent, showing original app")
+                                // 检查1: Intent extras中的show_original_app标志
+                                if (intent != null) {
+                                    logToAll("Checking intent extras...")
+                                    val showOriginalFromIntent = intent.getBooleanExtra("show_original_app", false)
+                                    logToAll("Intent show_original_app flag: $showOriginalFromIntent")
+                                    shouldShowOriginal = shouldShowOriginal || showOriginalFromIntent
+                                    
+                                    // 检查2: Intent flags - 如果是FLAG_ACTIVITY_CLEAR_TASK，可能是用户想要重新启动
+                                    val flags = intent.flags
+                                    val isClearTask = (flags and Intent.FLAG_ACTIVITY_CLEAR_TASK) != 0
+                                    logToAll("Intent flags: $flags, isClearTask: $isClearTask")
+                                    
+                                    // 检查3: 所有extras，用于调试
+                                    if (intent.extras != null) {
+                                        logToAll("Intent extras keys: ${intent.extras!!.keySet().joinToString()}")
+                                    } else {
+                                        logToAll("Intent extras is null")
+                                    }
+                                } else {
+                                    logToAll("Intent is null, trying to get from activity")
+                                }
+                                
+                                if (shouldShowOriginal) {
+                                    logToAll("Detected request to show original app, skipping UI replacement")
                                     return
                                 }
                                 
@@ -1353,19 +1397,25 @@ class XposedHook : IXposedHookLoadPackage {
     private fun launchOriginalApp(activity: Activity, prefs: android.content.SharedPreferences) {
         logToAll("Launching original app")
         
-        // 清除UI替换标志，确保下次启动能正常显示伪装界面
+        // 清除点击计数，确保下次点击能重新计数
         prefs.edit()
-            .putBoolean(KEY_UI_REPLACED, false)
             .putInt(KEY_CLICK_COUNT, 0)
             .putLong(KEY_LAST_CLICK_TIME, 0)
             .apply()
         
-        logToAll("Cleared UI replaced flag for next launch")
+        logToAll("Cleared click count for next launch")
         
-        // 使用Intent extras传递标志，而不是SharedPreferences
-        val intent = Intent(activity.intent)
+        // 创建新的Intent，使用显式Intent确保正确传递
+        val intent = Intent()
+        intent.component = activity.intent.component
+        intent.action = Intent.ACTION_MAIN
+        intent.addCategory(Intent.CATEGORY_LAUNCHER)
         intent.putExtra("show_original_app", true)
-        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
+        
+        // 使用CLEAR_TASK确保完全重新启动，避免复用旧的Intent
+        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK
+        
+        logToAll("Starting original app with intent: ${intent.component}, show_original_app=${intent.getBooleanExtra("show_original_app", false)}")
         
         activity.finish()
         activity.startActivity(intent)
