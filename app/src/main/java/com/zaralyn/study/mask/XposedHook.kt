@@ -349,7 +349,7 @@ class XposedHook : IXposedHookLoadPackage {
                     override fun beforeHookedMethod(param: MethodHookParam) {
                         try {
                             // 检查是否正在替换UI，防止递归
-                            if (isReplacingUI.get()) {
+                            if (isReplacingUI.get() == true) {
                                 return
                             }
                             
@@ -392,7 +392,7 @@ class XposedHook : IXposedHookLoadPackage {
                     override fun beforeHookedMethod(param: MethodHookParam) {
                         try {
                             // 检查是否正在替换UI，防止递归
-                            if (isReplacingUI.get()) {
+                            if (isReplacingUI.get() == true) {
                                 return
                             }
                             
@@ -442,7 +442,7 @@ class XposedHook : IXposedHookLoadPackage {
                     override fun beforeHookedMethod(param: MethodHookParam) {
                         try {
                             // 检查是否正在替换UI，防止递归
-                            if (isReplacingUI.get()) {
+                            if (isReplacingUI.get() == true) {
                                 return
                             }
                             
@@ -502,7 +502,7 @@ class XposedHook : IXposedHookLoadPackage {
                     override fun afterHookedMethod(param: MethodHookParam) {
                         try {
                             // 检查是否正在替换UI，防止递归
-                            if (isReplacingUI.get()) {
+                            if (isReplacingUI.get() == true) {
                                 return
                             }
                             
