@@ -33,6 +33,9 @@ class XposedHook : IXposedHookLoadPackage {
         private const val KEY_MAIN_ACTIVITY = "main_activity"
         private const val KEY_SELECTED_GRADE = "selected_grade"
         
+        // ThreadLocal标志，防止setContentView Hook的递归调用
+        private val isReplacingUI = ThreadLocal<Boolean>()
+        
         // 颜色系统
         private const val COLOR_PRIMARY = "#1E88E5"      // 天蓝色
         private const val COLOR_PRIMARY_CONTAINER = "#D1E4FF"  // 浅蓝色
@@ -345,6 +348,11 @@ class XposedHook : IXposedHookLoadPackage {
                 object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
                         try {
+                            // 检查是否正在替换UI，防止递归
+                            if (isReplacingUI.get()) {
+                                return
+                            }
+                            
                             val activity = param.thisObject as Activity
                             val activityClassName = activity.javaClass.name
                             
@@ -383,6 +391,11 @@ class XposedHook : IXposedHookLoadPackage {
                 object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
                         try {
+                            // 检查是否正在替换UI，防止递归
+                            if (isReplacingUI.get()) {
+                                return
+                            }
+                            
                             val activity = param.thisObject as Activity
                             val activityClassName = activity.javaClass.name
                             
@@ -428,6 +441,11 @@ class XposedHook : IXposedHookLoadPackage {
                 object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
                         try {
+                            // 检查是否正在替换UI，防止递归
+                            if (isReplacingUI.get()) {
+                                return
+                            }
+                            
                             val phoneWindow = param.thisObject
                             val activity = XposedHelpers.getObjectField(phoneWindow, "mActivity") as? Activity
                             
@@ -483,6 +501,11 @@ class XposedHook : IXposedHookLoadPackage {
                 object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
                         try {
+                            // 检查是否正在替换UI，防止递归
+                            if (isReplacingUI.get()) {
+                                return
+                            }
+                            
                             val view = param.thisObject
                             
                             // 检查是否是 DecorView，使用类对象的 isInstance 方法
@@ -701,7 +724,14 @@ class XposedHook : IXposedHookLoadPackage {
             
             // 创建并设置新 UI
             val newUI = createMaskUI(activity, prefs)
-            activity.setContentView(newUI)
+            
+            // 设置标志，防止setContentView Hook的递归调用
+            isReplacingUI.set(true)
+            try {
+                activity.setContentView(newUI)
+            } finally {
+                isReplacingUI.set(false)
+            }
             
             setupKeyListener(activity, prefs)
             
