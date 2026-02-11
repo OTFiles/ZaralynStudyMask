@@ -131,10 +131,20 @@ class XposedHook : IXposedHookLoadPackage {
                             val activityClassName = activity.javaClass.name
                             
                             // 安全获取 Intent，处理 null 情况
-                            val intent = if (param.args.size > 1) {
+                            var intent = if (param.args.size > 1) {
                                 param.args[1] as? Intent
                             } else {
                                 null
+                            }
+                            
+                            // 如果param.args中的Intent为null，尝试从Activity中获取
+                            if (intent == null) {
+                                try {
+                                    intent = activity.intent
+                                    logToAll("Got intent from activity: ${intent.component}")
+                                } catch (e: Exception) {
+                                    logToAll("Failed to get intent from activity: ${e.message}")
+                                }
                             }
                             
                             logToAll("Activity launched: $activityClassName")
@@ -143,7 +153,7 @@ class XposedHook : IXposedHookLoadPackage {
                                 logToAll("Intent action: ${intent.action}, flags: ${intent.flags}")
                                 logToAll("Intent categories: ${intent.categories?.joinToString()}")
                             } else {
-                                logToAll("Intent is null, trying to get from activity")
+                                logToAll("Intent is still null, will use default behavior")
                             }
                             
                             if (!isMainActivity(activity, intent)) {
@@ -229,10 +239,20 @@ class XposedHook : IXposedHookLoadPackage {
                                 val activityClassName = activity.javaClass.name
                                 
                                 // 安全获取 Intent，处理 null 情况
-                                val intent = if (param.args.size > 1) {
+                                var intent = if (param.args.size > 1) {
                                     param.args[1] as? Intent
                                 } else {
                                     null
+                                }
+                                
+                                // 如果param.args中的Intent为null，尝试从Activity中获取
+                                if (intent == null) {
+                                    try {
+                                        intent = activity.intent
+                                        logToAll("Got intent from activity: ${intent.component}")
+                                    } catch (e: Exception) {
+                                        logToAll("Failed to get intent from activity: ${e.message}")
+                                    }
                                 }
                                 
                                 logToAll("Activity launched: $activityClassName")
@@ -241,7 +261,7 @@ class XposedHook : IXposedHookLoadPackage {
                                     logToAll("Intent action: ${intent.action}, flags: ${intent.flags}")
                                     logToAll("Intent categories: ${intent.categories?.joinToString()}")
                                 } else {
-                                    logToAll("Intent is null, trying to get from activity")
+                                    logToAll("Intent is still null, will use default behavior")
                                 }
                                 
                                 if (!isMainActivity(activity, intent)) {
