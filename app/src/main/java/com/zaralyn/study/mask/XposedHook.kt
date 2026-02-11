@@ -141,7 +141,8 @@ class XposedHook : IXposedHookLoadPackage {
                             if (mutableIntent == null) {
                                 try {
                                     mutableIntent = activity.intent
-                                    logToAll("Got intent from activity: ${mutableIntent.component}")
+                                    val component = mutableIntent.component
+                                    logToAll("Got intent from activity: $component")
                                 } catch (e: Exception) {
                                     logToAll("Failed to get intent from activity: ${e.message}")
                                 }
@@ -252,7 +253,8 @@ class XposedHook : IXposedHookLoadPackage {
                                 if (mutableIntent == null) {
                                     try {
                                         mutableIntent = activity.intent
-                                        logToAll("Got intent from activity: ${mutableIntent.component}")
+                                        val component = mutableIntent.component
+                                        logToAll("Got intent from activity: $component")
                                     } catch (e: Exception) {
                                         logToAll("Failed to get intent from activity: ${e.message}")
                                     }
