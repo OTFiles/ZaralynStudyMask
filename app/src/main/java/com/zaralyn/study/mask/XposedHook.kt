@@ -17,6 +17,7 @@ import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
+import java.lang.ref.WeakReference
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -25,14 +26,16 @@ class XposedHook : IXposedHookLoadPackage {
 
     companion object {
         private const val TAG = "ZaralynStudyMask"
-        private const val PREFS_NAME = "ZaralynStudyMask"
-        private const val KEY_SHOW_ORIGINAL = "show_original_app"
-        private const val KEY_CLICK_COUNT = "home_click_count"
-        private const val KEY_LAST_CLICK_TIME = "last_click_time"
-        private const val KEY_UI_REPLACED = "ui_replaced"
-        private const val KEY_MAIN_ACTIVITY = "main_activity"
-        private const val KEY_SELECTED_GRADE = "selected_grade"
-        
+            private const val PREFS_NAME = "ZaralynStudyMask"
+            private const val KEY_SHOW_ORIGINAL = "show_original_app"
+            private const val KEY_CLICK_COUNT = "home_click_count"
+            private const val KEY_LAST_CLICK_TIME = "last_click_time"
+            private const val KEY_UI_REPLACED = "ui_replaced"
+            private const val KEY_MAIN_ACTIVITY = "main_activity"
+            private const val KEY_SELECTED_GRADE = "selected_grade"
+            
+            // 用于保存WindowManager overlay的引用，以便后续刷新
+            private var overlayViewRef: WeakReference<View>? = null        
         // ThreadLocal标志，防止setContentView Hook的递归调用
         private val isReplacingUI = ThreadLocal<Boolean>()
         
@@ -815,6 +818,9 @@ class XposedHook : IXposedHookLoadPackage {
             // 创建全屏覆盖 View
             val overlayView = createMaskUI(activity, prefs)
             
+            // 保存overlayView的引用，以便后续刷新
+            overlayViewRef = WeakReference(overlayView)
+            
             // 获取 WindowManager
             val windowManager = activity.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
             
@@ -1106,17 +1112,29 @@ class XposedHook : IXposedHookLoadPackage {
             logToAll("Saved current grade: $gradeLevel to SharedPreferences")
             
             try {
-                // 使用ID准确定位并刷新内容
-                val contentView = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
-                if (contentView == null || contentView.childCount == 0) {
-                    logToAll("Content view not found or empty")
-                    return@setOnClickListener
+                // 优先使用WindowManager overlay中的ScrollView（适用于NativeActivity）
+                var scrollView: ScrollView? = null
+                
+                // 方法1：尝试从WindowManager overlay中查找
+                overlayViewRef?.get()?.let { overlay ->
+                    scrollView = overlay.findViewById<ScrollView>(android.R.id.custom)
+                    logToAll("Found ScrollView in WindowManager overlay: ${scrollView != null}")
                 }
                 
-                // 查找ScrollView
-                val scrollView = contentView.findViewById<ScrollView>(android.R.id.custom)
+                // 方法2：如果overlay中没有，尝试从Activity的ContentView中查找（适用于普通Activity）
                 if (scrollView == null) {
-                    logToAll("ScrollView not found")
+                    val contentView = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
+                    if (contentView != null && contentView.childCount > 0) {
+                        val firstChild = contentView.getChildAt(0)
+                        if (firstChild is LinearLayout) {
+                            scrollView = firstChild.findViewById<ScrollView>(android.R.id.custom)
+                            logToAll("Found ScrollView in Activity content: ${scrollView != null}")
+                        }
+                    }
+                }
+                
+                if (scrollView == null) {
+                    logToAll("ScrollView not found (tried both WindowManager overlay and Activity content)")
                     return@setOnClickListener
                 }
                 
@@ -1435,23 +1453,29 @@ class XposedHook : IXposedHookLoadPackage {
             }
             
             try {
-                // 使用ID准确定位ScrollView
-                val contentView = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
-                if (contentView == null || contentView.childCount == 0) {
-                    logToAll("Content view not found or empty")
-                    return@setOnClickListener
+                // 优先使用WindowManager overlay中的ScrollView（适用于NativeActivity）
+                var scrollView: ScrollView? = null
+                
+                // 方法1：尝试从WindowManager overlay中查找
+                overlayViewRef?.get()?.let { overlay ->
+                    scrollView = overlay.findViewById<ScrollView>(android.R.id.custom)
+                    logToAll("Found ScrollView in WindowManager overlay: ${scrollView != null}")
                 }
                 
-                val firstChild = contentView.getChildAt(0)
-                if (firstChild !is LinearLayout) {
-                    logToAll("Root view is not LinearLayout")
-                    return@setOnClickListener
-                }
-                
-                // 查找ScrollView
-                val scrollView = firstChild.findViewById<ScrollView>(android.R.id.custom)
+                // 方法2：如果overlay中没有，尝试从Activity的ContentView中查找（适用于普通Activity）
                 if (scrollView == null) {
-                    logToAll("ScrollView not found")
+                    val contentView = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
+                    if (contentView != null && contentView.childCount > 0) {
+                        val firstChild = contentView.getChildAt(0)
+                        if (firstChild is LinearLayout) {
+                            scrollView = firstChild.findViewById<ScrollView>(android.R.id.custom)
+                            logToAll("Found ScrollView in Activity content: ${scrollView != null}")
+                        }
+                    }
+                }
+                
+                if (scrollView == null) {
+                    logToAll("ScrollView not found (tried both WindowManager overlay and Activity content)")
                     return@setOnClickListener
                 }
                 
@@ -1464,6 +1488,8 @@ class XposedHook : IXposedHookLoadPackage {
                 }
                 newContent.id = android.R.id.list
                 scrollView.addView(newContent)
+                
+                logToAll("Content updated successfully for: $title")
                 
                 // 更新导航栏选中状态
                 updateNavigationSelection(activity, title)
@@ -1491,30 +1517,57 @@ class XposedHook : IXposedHookLoadPackage {
     
     // 更新导航栏选中状态
     private fun updateNavigationSelection(activity: Activity, selectedTitle: String) {
-        val contentView = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
-        if (contentView != null && contentView.childCount > 0) {
-            val firstChild = contentView.getChildAt(0)
-            if (firstChild is LinearLayout) {
-                // 找到底部导航栏（最后一个子元素）
-                val navBar = firstChild.getChildAt(firstChild.childCount - 1)
-                if (navBar is LinearLayout) {
-                    for (i in 0 until navBar.childCount) {
-                        val navItem = navBar.getChildAt(i)
-                        if (navItem is LinearLayout && navItem.childCount >= 2) {
-                            val titleText = navItem.getChildAt(1) as? TextView
-                            if (titleText?.text == selectedTitle) {
-                                // 选中状态
-                                navItem.setBackgroundColor(Color.parseColor(COLOR_PRIMARY_CONTAINER))
-                                (navItem.getChildAt(0) as? TextView)?.setTextColor(Color.parseColor(COLOR_PRIMARY))
-                                titleText?.setTextColor(Color.parseColor(COLOR_PRIMARY))
-                            } else {
-                                // 未选中状态
-                                navItem.setBackgroundColor(Color.TRANSPARENT)
-                                (navItem.getChildAt(0) as? TextView)?.setTextColor(Color.parseColor(COLOR_OUTLINE))
-                                titleText?.setTextColor(Color.parseColor(COLOR_OUTLINE))
-                            }
-                        }
+        // 优先使用WindowManager overlay中的导航栏（适用于NativeActivity）
+        var navBar: LinearLayout? = null
+        
+        // 方法1：尝试从WindowManager overlay中查找
+        overlayViewRef?.get()?.let { overlay ->
+            if (overlay is LinearLayout && overlay.childCount >= 2) {
+                // overlay的最后一个子元素是底部导航栏
+                val lastChild = overlay.getChildAt(overlay.childCount - 1)
+                if (lastChild is LinearLayout) {
+                    navBar = lastChild
+                    logToAll("Found nav bar in WindowManager overlay")
+                }
+            }
+        }
+        
+        // 方法2：如果overlay中没有，尝试从Activity的ContentView中查找（适用于普通Activity）
+        if (navBar == null) {
+            val contentView = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
+            if (contentView != null && contentView.childCount > 0) {
+                val firstChild = contentView.getChildAt(0)
+                if (firstChild is LinearLayout) {
+                    // 找到底部导航栏（最后一个子元素）
+                    val lastChild = firstChild.getChildAt(firstChild.childCount - 1)
+                    if (lastChild is LinearLayout) {
+                        navBar = lastChild
+                        logToAll("Found nav bar in Activity content")
                     }
+                }
+            }
+        }
+        
+        if (navBar == null) {
+            logToAll("Navigation bar not found")
+            return
+        }
+        
+        // 更新导航栏的选中状态
+        for (i in 0 until navBar.childCount) {
+            val navItem = navBar.getChildAt(i)
+            if (navItem is LinearLayout && navItem.childCount >= 2) {
+                val titleText = navItem.getChildAt(1) as? TextView
+                if (titleText?.text == selectedTitle) {
+                    // 选中状态
+                    navItem.setBackgroundColor(Color.parseColor(COLOR_PRIMARY_CONTAINER))
+                    (navItem.getChildAt(0) as? TextView)?.setTextColor(Color.parseColor(COLOR_PRIMARY))
+                    titleText?.setTextColor(Color.parseColor(COLOR_PRIMARY))
+                } else {
+                    // 未选中状态
+                    navItem.setBackgroundColor(Color.TRANSPARENT)
+                    (navItem.getChildAt(0) as? TextView)?.setTextColor(Color.parseColor(COLOR_OUTLINE))
+                    titleText?.setTextColor(Color.parseColor(COLOR_OUTLINE))
                 }
             }
         }
