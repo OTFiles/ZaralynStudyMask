@@ -752,60 +752,37 @@ class XposedHook : IXposedHookLoadPackage {
             // 保存原视图
             val decorView = activity.window.decorView
             val contentView = decorView.findViewById<ViewGroup>(android.R.id.content)
-            
+
             // 检查ContentView是否存在且有效
             if (contentView == null) {
                 logToAll("ContentView is null, skipping UI replacement")
                 return
             }
-            
+
             // 检查是否已经被替换过（防止重复替换）
             if (contentView.childCount > 0) {
                 val firstChild = contentView.getChildAt(0)
-                if (firstChild is FrameLayout && firstChild.id == android.R.id.custom) {
+                if (firstChild is LinearLayout && firstChild.id == android.R.id.custom) {
                     logToAll("UI already replaced, skipping duplicate replacement")
                     return
                 }
             }
-            
-            // 使用FrameLayout包装方案，保留原视图
-            val frameLayout = FrameLayout(activity)
-            // 不设置FrameLayout背景色，让maskUI的背景色生效
-            frameLayout.id = android.R.id.custom  // 使用预定义的ID标识FrameLayout
-            
-            // 将原视图添加到FrameLayout中（如果存在）
-            if (contentView.childCount > 0) {
-                val originalView = contentView.getChildAt(0)
-                logToAll("Original view: ${originalView.javaClass.name}")
-                
-                // 保存原视图的布局参数
-                val layoutParams = originalView.layoutParams
-                
-                // 移除原视图并添加到FrameLayout
-                contentView.removeView(originalView)
-                frameLayout.addView(originalView, layoutParams)
-            } else {
-                logToAll("ContentView has no children")
-            }
-            
-            // 创建并添加伪装界面到FrameLayout顶部
-            val maskUI = createMaskUI(activity, prefs)
-            frameLayout.addView(maskUI, FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            ))
-            
+
+            // 创建并设置新的 UI（直接替换，不使用FrameLayout包装）
+            val newUI = createMaskUI(activity, prefs)
+            newUI.id = android.R.id.custom  // 使用预定义的ID标识新UI
+
             // 设置标志，防止setContentView Hook的递归调用
             isReplacingUI.set(true)
             try {
-                activity.setContentView(frameLayout as View)
+                activity.setContentView(newUI)
             } finally {
                 isReplacingUI.set(false)
             }
-            
+
             setupKeyListener(activity, prefs)
-            
-            logToAll("UI replaced successfully (FrameLayout wrapping method)")
+
+            logToAll("UI replaced successfully (direct replacement method)")
         } catch (e: Exception) {
             logToAll("Failed to replace UI: ${e.message}")
             e.printStackTrace()
@@ -1159,57 +1136,47 @@ class XposedHook : IXposedHookLoadPackage {
             
             try {
                 var scrollViewVar: ScrollView? = null
-                
+
                 // 方法1：尝试从WindowManager overlay中查找（适用于NativeActivity）
                 overlayViewRef?.get()?.let { overlay ->
                     scrollViewVar = overlay.findViewById<ScrollView>(android.R.id.text1)
                     logToAll("Found ScrollView in WindowManager overlay: ${scrollViewVar != null}")
                 }
-                
-                // 方法2：如果overlay中没有，尝试从Activity的ContentView中查找（适用于FrameLayout包装模式）
+
+                // 方法2：如果overlay中没有，尝试从Activity的ContentView中查找
                 if (scrollViewVar == null) {
                     val contentView = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
                     if (contentView != null && contentView.childCount > 0) {
                         val firstChild = contentView.getChildAt(0)
-                        // 检查是否是FrameLayout（FrameLayout包装模式）
-                        if (firstChild is FrameLayout && firstChild.id == android.R.id.custom) {
-                            // 找到maskUI（最后一个子视图）
-                            if (firstChild.childCount > 0) {
-                                val maskUI = firstChild.getChildAt(firstChild.childCount - 1)
-                                if (maskUI is ViewGroup) {
-                                    scrollViewVar = maskUI.findViewById<ScrollView>(android.R.id.text1)
-                                    logToAll("Found ScrollView in FrameLayout wrapper: ${scrollViewVar != null}")
-                                }
-                            }
-                        } else if (firstChild is LinearLayout) {
-                            // 兼容旧版本逻辑
+                        // 检查是否是LinearLayout（直接替换模式）
+                        if (firstChild is LinearLayout && firstChild.id == android.R.id.custom) {
                             scrollViewVar = firstChild.findViewById<ScrollView>(android.R.id.text1)
-                            logToAll("Found ScrollView in LinearLayout: ${scrollViewVar != null}")
+                            logToAll("Found ScrollView in LinearLayout (maskUI): ${scrollViewVar != null}")
                         }
                     }
                 }
-                
+
                 val scrollView = scrollViewVar
                 if (scrollView == null) {
                     logToAll("ScrollView not found (tried both WindowManager overlay and Activity content)")
                     return@setOnClickListener
                 }
-                
+
                 // 查找内容布局
                 val contentLayout = scrollView.findViewById<LinearLayout>(android.R.id.list)
                 if (contentLayout == null) {
                     logToAll("Content layout not found")
                     return@setOnClickListener
                 }
-                
+
                 // 移除旧的内容布局，添加新的
                 val parent = scrollView as android.view.ViewGroup
                 parent.removeView(contentLayout)
-                
+
                 val newContentLayout = createContentLayout(activity, prefs)
                 newContentLayout.id = android.R.id.list
                 parent.addView(newContentLayout)
-                
+
                 logToAll("Content layout refreshed successfully")
                 
             } catch (e: Exception) {
@@ -1511,42 +1478,32 @@ class XposedHook : IXposedHookLoadPackage {
             
             try {
                 var scrollViewVar: ScrollView? = null
-                
+
                 // 方法1：尝试从WindowManager overlay中查找（适用于NativeActivity）
                 overlayViewRef?.get()?.let { overlay ->
                     scrollViewVar = overlay.findViewById<ScrollView>(android.R.id.text1)
                     logToAll("Found ScrollView in WindowManager overlay: ${scrollViewVar != null}")
                 }
-                
-                // 方法2：如果overlay中没有，尝试从Activity的ContentView中查找（适用于FrameLayout包装模式）
+
+                // 方法2：如果overlay中没有，尝试从Activity的ContentView中查找
                 if (scrollViewVar == null) {
                     val contentView = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
                     if (contentView != null && contentView.childCount > 0) {
                         val firstChild = contentView.getChildAt(0)
-                        // 检查是否是FrameLayout（FrameLayout包装模式）
-                        if (firstChild is FrameLayout && firstChild.id == android.R.id.custom) {
-                            // 找到maskUI（最后一个子视图）
-                            if (firstChild.childCount > 0) {
-                                val maskUI = firstChild.getChildAt(firstChild.childCount - 1)
-                                if (maskUI is ViewGroup) {
-                                    scrollViewVar = maskUI.findViewById<ScrollView>(android.R.id.text1)
-                                    logToAll("Found ScrollView in FrameLayout wrapper: ${scrollViewVar != null}")
-                                }
-                            }
-                        } else if (firstChild is LinearLayout) {
-                            // 兼容旧版本逻辑
+                        // 检查是否是LinearLayout（直接替换模式）
+                        if (firstChild is LinearLayout && firstChild.id == android.R.id.custom) {
                             scrollViewVar = firstChild.findViewById<ScrollView>(android.R.id.text1)
-                            logToAll("Found ScrollView in LinearLayout: ${scrollViewVar != null}")
+                            logToAll("Found ScrollView in LinearLayout (maskUI): ${scrollViewVar != null}")
                         }
                     }
                 }
-                
+
                 val scrollView = scrollViewVar
                 if (scrollView == null) {
                     logToAll("ScrollView not found (tried both WindowManager overlay and Activity content)")
                     return@setOnClickListener
                 }
-                
+
                 // 替换ScrollView的内容
                 scrollView.removeAllViews()
                 val newContent = when (title) {
@@ -1556,7 +1513,7 @@ class XposedHook : IXposedHookLoadPackage {
                 }
                 newContent.id = android.R.id.list
                 scrollView.addView(newContent)
-                
+
                 logToAll("Content updated successfully for: $title")
                 
                 // 更新导航栏选中状态
