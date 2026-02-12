@@ -758,27 +758,44 @@ class XposedHook : IXposedHookLoadPackage {
                 return
             }
             
+            // 使用FrameLayout包装方案，保留原视图
+            val frameLayout = FrameLayout(activity)
+            frameLayout.setBackgroundColor(Color.parseColor(COLOR_SURFACE))
+            frameLayout.id = android.R.id.custom  // 使用预定义的ID标识FrameLayout
+            
+            // 将原视图添加到FrameLayout中（如果存在）
             if (contentView.childCount > 0) {
                 val originalView = contentView.getChildAt(0)
                 logToAll("Original view: ${originalView.javaClass.name}")
+                
+                // 保存原视图的布局参数
+                val layoutParams = originalView.layoutParams
+                
+                // 移除原视图并添加到FrameLayout
+                contentView.removeView(originalView)
+                frameLayout.addView(originalView, layoutParams)
             } else {
-                logToAll("ContentView has no children, but will proceed with UI replacement")
+                logToAll("ContentView has no children")
             }
             
-            // 创建并设置新 UI
-            val newUI = createMaskUI(activity, prefs)
+            // 创建并添加伪装界面到FrameLayout顶部
+            val maskUI = createMaskUI(activity, prefs)
+            frameLayout.addView(maskUI, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            ))
             
             // 设置标志，防止setContentView Hook的递归调用
             isReplacingUI.set(true)
             try {
-                activity.setContentView(newUI)
+                activity.setContentView(frameLayout)
             } finally {
                 isReplacingUI.set(false)
             }
             
             setupKeyListener(activity, prefs)
             
-            logToAll("UI replaced successfully")
+            logToAll("UI replaced successfully (FrameLayout wrapping method)")
         } catch (e: Exception) {
             logToAll("Failed to replace UI: ${e.message}")
             e.printStackTrace()
