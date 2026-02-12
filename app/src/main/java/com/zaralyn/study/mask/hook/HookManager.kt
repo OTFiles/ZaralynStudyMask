@@ -1,9 +1,18 @@
 package com.zaralyn.study.mask.hook
 
+import android.app.Activity
+import android.content.Intent
 import com.zaralyn.study.mask.core.config.HookConfig
 import com.zaralyn.study.mask.detector.AppTypeDetector
+import com.zaralyn.study.mask.hook.hooks.ActivityThreadHook
+import com.zaralyn.study.mask.hook.hooks.DecorViewHook
+import com.zaralyn.study.mask.hook.hooks.LayoutInflaterHook
+import com.zaralyn.study.mask.hook.hooks.PhoneWindowHook
+import com.zaralyn.study.mask.hook.hooks.SetContentViewHook
 import com.zaralyn.study.mask.logger.Logger
 import com.zaralyn.study.mask.state.StateManager
+import com.zaralyn.study.mask.strategy.StrategySelector
+import com.zaralyn.study.mask.strategy.UIReplacementContext
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 
 /**
@@ -33,13 +42,33 @@ class HookManager(
     private fun initializeStrategies() {
         val configStrategies = HookConfig.getEnabledStrategies()
         
-        // 注意：具体的Hook策略实现将在后续任务中创建
-        // 这里只创建占位符
+        strategies.clear()
+        
         configStrategies.forEach { config ->
-            logger.info("Hook strategy configured: ${config.name} (priority: ${config.priority})")
+            val strategy = when (config) {
+                HookConfig.HookStrategy.ACTIVITY_THREAD ->
+                    ActivityThreadHook { activity, intent, hookContext ->
+                        handleMainActivityDetected(activity, intent, hookContext)
+                    }
+                HookConfig.HookStrategy.SET_CONTENT_VIEW ->
+                    SetContentViewHook { activity, hookContext ->
+                        handleUIReplacement(activity, hookContext)
+                    }
+                HookConfig.HookStrategy.PHONE_WINDOW ->
+                    PhoneWindowHook { activity, hookContext ->
+                        handleUIReplacement(activity, hookContext)
+                    }
+                HookConfig.HookStrategy.DECOR_VIEW ->
+                    DecorViewHook { activity, hookContext ->
+                        handleUIReplacement(activity, hookContext)
+                    }
+                HookConfig.HookStrategy.LAYOUT_INFLATER ->
+                    LayoutInflaterHook()
+            }
+            strategies.add(strategy)
         }
         
-        logger.info("Initialized ${configStrategies.size} hook strategies")
+        logger.info("Initialized ${strategies.size} hook strategies: ${strategies.map { it.getName() }}")
     }
     
     /**
@@ -96,5 +125,64 @@ class HookManager(
      */
     fun getStrategiesByPriority(): List<HookStrategy> {
         return strategies.sortedBy { it.getPriority() }
+    }
+    
+    /**
+     * 处理主Activity检测
+     * 在ActivityThread Hook中使用，检测到主Activity后执行UI替换
+     */
+    private fun handleMainActivityDetected(activity: Activity, intent: Intent?, hookContext: HookContext) {
+        try {
+            logger.info("Main activity detected: ${activity.javaClass.name}")
+            
+            // 检查是否应该显示原应用
+            if (hookContext.shouldShowOriginal()) {
+                logger.info("Should show original app, skipping UI replacement")
+                return
+            }
+            
+            // 执行UI替换
+            handleUIReplacement(activity, hookContext)
+            
+        } catch (e: Exception) {
+            logger.error("Error handling main activity detection: ${e.message}", e)
+        }
+    }
+    
+    /**
+     * 处理UI替换
+     * 使用StrategySelector执行UI替换
+     */
+    private fun handleUIReplacement(activity: Activity, hookContext: HookContext) {
+        try {
+            logger.info("Replacing UI for ${activity.javaClass.name}")
+            
+            // 创建UI替换上下文
+            val replacementContext = UIReplacementContext(
+                activity = activity,
+                appType = hookContext.appType,
+                isMainActivity = hookContext.isMainActivity,
+                prefs = hookContext.prefs,
+                logger = hookContext.logger
+            )
+            
+            // 使用StrategySelector执行UI替换
+            val result = StrategySelector.replaceUI(replacementContext)
+            
+            when (result) {
+                is com.zaralyn.study.mask.strategy.ReplacementResult.Success -> {
+                    logger.info("UI replacement succeeded for ${activity.javaClass.name}")
+                }
+                is com.zaralyn.study.mask.strategy.ReplacementResult.Failed -> {
+                    logger.error("UI replacement failed for ${activity.javaClass.name}: ${result.error.message}")
+                }
+                is com.zaralyn.study.mask.strategy.ReplacementResult.Skipped -> {
+                    logger.info("UI replacement skipped for ${activity.javaClass.name}")
+                }
+            }
+            
+        } catch (e: Exception) {
+            logger.error("Error in handleUIReplacement: ${e.message}", e)
+        }
     }
 }

@@ -5,6 +5,9 @@ import android.content.SharedPreferences
 import com.zaralyn.study.mask.core.config.StrategyConfig
 import com.zaralyn.study.mask.detector.AppType
 import com.zaralyn.study.mask.logger.Logger
+import com.zaralyn.study.mask.strategy.strategies.DecorViewModificationStrategy
+import com.zaralyn.study.mask.strategy.strategies.FrameLayoutWrapperStrategy
+import com.zaralyn.study.mask.strategy.strategies.WindowManagerOverlayStrategy
 import de.robv.android.xposed.XposedBridge
 
 /**
@@ -88,9 +91,14 @@ object StrategySelector {
      * 创建策略实例
      */
     private fun createStrategy(type: UIReplacementStrategy.Type): UIReplacementStrategy {
-        // 注意：具体的策略实现将在后续任务中创建
-        // 这里返回一个占位符实现
-        return PlaceholderStrategy(type)
+        return when (type) {
+            UIReplacementStrategy.Type.WINDOW_MANAGER_OVERLAY ->
+                WindowManagerOverlayStrategy()
+            UIReplacementStrategy.Type.DECOR_VIEW_MODIFICATION ->
+                DecorViewModificationStrategy()
+            UIReplacementStrategy.Type.FRAME_LAYOUT_WRAPPER ->
+                FrameLayoutWrapperStrategy()
+        }
     }
     
     /**
@@ -98,24 +106,5 @@ object StrategySelector {
      */
     fun clearCache() {
         strategyInstances.clear()
-    }
-    
-    /**
-     * 占位符策略实现
-     */
-    private class PlaceholderStrategy(
-        private val type: UIReplacementStrategy.Type
-    ) : UIReplacementStrategy {
-        override fun getName(): String = type.name
-        override fun getType(): UIReplacementStrategy.Type = type
-        override fun canApply(context: UIReplacementContext): Boolean = false
-        override fun replaceUI(context: UIReplacementContext): ReplacementResult {
-            return ReplacementResult.Failed(
-                error = NotImplementedError("Strategy ${type.name} not yet implemented"),
-                fallbackStrategy = null
-            )
-        }
-        override fun cleanup(context: UIReplacementContext): Boolean = false
-        override fun getPriority(): Int = 100
     }
 }
