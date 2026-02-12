@@ -365,7 +365,7 @@ class XposedHook : IXposedHookLoadPackage {
                             logToAll("Replacing UI via setContentView(int) hook")
                             
                             // 调用replaceActivityUI函数，这样可以正确处理NativeActivity
-                            replaceActivityUI(activity, prefs)
+                            replaceActivityUI(activity, prefs, allowNativeActivity = true)
                             param.setResult(null)
                         } catch (e: Exception) {
                             logToAll("Error in setContentView(int) hook: ${e.message}")
@@ -408,7 +408,7 @@ class XposedHook : IXposedHookLoadPackage {
                                                     logToAll("Replacing UI via setContentView(View) hook")
                                                     
                                                     // 调用replaceActivityUI函数，这样可以正确处理NativeActivity
-                                                    replaceActivityUI(activity, prefs)
+                                                    replaceActivityUI(activity, prefs, allowNativeActivity = true)
                                                     param.setResult(null)                        } catch (e: Exception) {
                             logToAll("Error in setContentView(View) hook: ${e.message}")
                             e.printStackTrace()
@@ -462,7 +462,7 @@ class XposedHook : IXposedHookLoadPackage {
                             logToAll("Replacing UI via PhoneWindow hook")
                                                     
                                                     // 调用replaceActivityUI函数，这样可以正确处理NativeActivity
-                                                    replaceActivityUI(activity, prefs)
+                                                    replaceActivityUI(activity, prefs, allowNativeActivity = true)
                                                     param.setResult(null)                        } catch (e: Exception) {
                             logToAll("Error in PhoneWindow hook: ${e.message}")
                             e.printStackTrace()
@@ -531,7 +531,7 @@ class XposedHook : IXposedHookLoadPackage {
                             // 调用replaceActivityUI函数，这样可以正确处理NativeActivity
                             activity.window.decorView.post {
                                 try {
-                                    replaceActivityUI(activity, prefs)
+                                    replaceActivityUI(activity, prefs, allowNativeActivity = true)
                                 } catch (e: Exception) {
                                     logToAll("Failed to replace UI via DecorView: ${e.message}")
                                     e.printStackTrace()
@@ -597,28 +597,42 @@ class XposedHook : IXposedHookLoadPackage {
                 return
             }
 
-            val maxAttempts = 10
-            val delayMs = 50L
+            val maxAttempts = 20  // 增加最大尝试次数
+            val delayMs = 100L  // 增加延迟时间
 
             if (attempt >= maxAttempts) {
                 logToAll("Reached max attempts ($maxAttempts), proceeding with UI replacement anyway")
-                replaceActivityUI(activity, prefs)
+                replaceActivityUI(activity, prefs, allowNativeActivity = true)  // 延迟后允许 NativeActivity 替换
                 return
             }
 
             val decorView = activity.window.decorView
             val contentView = decorView.findViewById<ViewGroup>(android.R.id.content)
 
+            // 复杂应用额外延迟检测（例如浏览器）
+            val isComplexApp = activity.packageName.contains("browser") ||
+                              activity.packageName.contains("chrome") ||
+                              activity.packageName.contains("browser") ||
+                              activity.javaClass.name.contains("Browser") ||
+                              activity.javaClass.name.contains("Chrome")
+
+            // 增强检测：不仅要ContentView有内容，还要检测应用包名
             if (contentView == null || contentView.childCount == 0) {
                 // ContentView还没有内容，延迟后重试
                 logToAll("ContentView is empty (attempt $attempt/$maxAttempts), will retry in ${delayMs}ms")
                 decorView.postDelayed({
                     replaceActivityUIWithDelay(activity, prefs, attempt + 1)
                 }, delayMs)
+            } else if (isComplexApp && attempt < 10) {
+                // 复杂应用额外延迟检测
+                logToAll("Complex app detected (${activity.packageName}), extra delay before replacement (attempt $attempt/$maxAttempts)")
+                decorView.postDelayed({
+                    replaceActivityUIWithDelay(activity, prefs, attempt + 1)
+                }, delayMs)
             } else {
                 // ContentView有内容，可以进行UI替换
                 logToAll("ContentView has ${contentView.childCount} children, proceeding with UI replacement")
-                replaceActivityUI(activity, prefs)
+                replaceActivityUI(activity, prefs, allowNativeActivity = true)  // 延迟后允许 NativeActivity 替换
             }
         } catch (e: Exception) {
             logToAll("Error in replaceActivityUIWithDelay: ${e.message}")
@@ -739,8 +753,8 @@ class XposedHook : IXposedHookLoadPackage {
     }
 
     // 替换 Activity UI
-    private fun replaceActivityUI(activity: Activity, prefs: android.content.SharedPreferences) {
-        logToAll("Replacing activity UI")
+    private fun replaceActivityUI(activity: Activity, prefs: android.content.SharedPreferences, allowNativeActivity: Boolean = false) {
+        logToAll("Replacing activity UI (allowNativeActivity=$allowNativeActivity)")
         
         try {
             // 检查Activity是否已经完成初始化
@@ -767,9 +781,17 @@ class XposedHook : IXposedHookLoadPackage {
             }
             
             if (isNativeActivity) {
-                logToAll("Detected NativeActivity (class: ${activity.javaClass.name}), skipping UI replacement in ActivityThread hook")
-                logToAll("NativeActivity will be handled by setContentView hook instead to avoid double initialization")
-                return
+                if (allowNativeActivity) {
+                    // 允许 NativeActivity 替换，使用 WindowManager 方案
+                    logToAll("Detected NativeActivity (class: ${activity.javaClass.name}), using WindowManager overlay method")
+                    replaceNativeActivityUI(activity, prefs)
+                    return
+                } else {
+                    // 不允许 NativeActivity 替换（ActivityThread hook）
+                    logToAll("Detected NativeActivity (class: ${activity.javaClass.name}), skipping UI replacement in ActivityThread hook")
+                    logToAll("NativeActivity will be handled by setContentView hook instead to avoid double initialization")
+                    return
+                }
             }
             
             // 保存原视图
