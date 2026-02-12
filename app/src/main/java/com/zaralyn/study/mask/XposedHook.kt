@@ -1113,26 +1113,27 @@ class XposedHook : IXposedHookLoadPackage {
             
             try {
                 // 优先使用WindowManager overlay中的ScrollView（适用于NativeActivity）
-                var scrollView: ScrollView? = null
+                var scrollViewVar: ScrollView? = null
                 
                 // 方法1：尝试从WindowManager overlay中查找
                 overlayViewRef?.get()?.let { overlay ->
-                    scrollView = overlay.findViewById<ScrollView>(android.R.id.custom)
-                    logToAll("Found ScrollView in WindowManager overlay: ${scrollView != null}")
+                    scrollViewVar = overlay.findViewById<ScrollView>(android.R.id.custom)
+                    logToAll("Found ScrollView in WindowManager overlay: ${scrollViewVar != null}")
                 }
                 
                 // 方法2：如果overlay中没有，尝试从Activity的ContentView中查找（适用于普通Activity）
-                if (scrollView == null) {
+                if (scrollViewVar == null) {
                     val contentView = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
                     if (contentView != null && contentView.childCount > 0) {
                         val firstChild = contentView.getChildAt(0)
                         if (firstChild is LinearLayout) {
-                            scrollView = firstChild.findViewById<ScrollView>(android.R.id.custom)
-                            logToAll("Found ScrollView in Activity content: ${scrollView != null}")
+                            scrollViewVar = firstChild.findViewById<ScrollView>(android.R.id.custom)
+                            logToAll("Found ScrollView in Activity content: ${scrollViewVar != null}")
                         }
                     }
                 }
                 
+                val scrollView = scrollViewVar
                 if (scrollView == null) {
                     logToAll("ScrollView not found (tried both WindowManager overlay and Activity content)")
                     return@setOnClickListener
@@ -1454,26 +1455,27 @@ class XposedHook : IXposedHookLoadPackage {
             
             try {
                 // 优先使用WindowManager overlay中的ScrollView（适用于NativeActivity）
-                var scrollView: ScrollView? = null
+                var scrollViewVar: ScrollView? = null
                 
                 // 方法1：尝试从WindowManager overlay中查找
                 overlayViewRef?.get()?.let { overlay ->
-                    scrollView = overlay.findViewById<ScrollView>(android.R.id.custom)
-                    logToAll("Found ScrollView in WindowManager overlay: ${scrollView != null}")
+                    scrollViewVar = overlay.findViewById<ScrollView>(android.R.id.custom)
+                    logToAll("Found ScrollView in WindowManager overlay: ${scrollViewVar != null}")
                 }
                 
                 // 方法2：如果overlay中没有，尝试从Activity的ContentView中查找（适用于普通Activity）
-                if (scrollView == null) {
+                if (scrollViewVar == null) {
                     val contentView = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
                     if (contentView != null && contentView.childCount > 0) {
                         val firstChild = contentView.getChildAt(0)
                         if (firstChild is LinearLayout) {
-                            scrollView = firstChild.findViewById<ScrollView>(android.R.id.custom)
-                            logToAll("Found ScrollView in Activity content: ${scrollView != null}")
+                            scrollViewVar = firstChild.findViewById<ScrollView>(android.R.id.custom)
+                            logToAll("Found ScrollView in Activity content: ${scrollViewVar != null}")
                         }
                     }
                 }
                 
+                val scrollView = scrollViewVar
                 if (scrollView == null) {
                     logToAll("ScrollView not found (tried both WindowManager overlay and Activity content)")
                     return@setOnClickListener
@@ -1518,7 +1520,7 @@ class XposedHook : IXposedHookLoadPackage {
     // 更新导航栏选中状态
     private fun updateNavigationSelection(activity: Activity, selectedTitle: String) {
         // 优先使用WindowManager overlay中的导航栏（适用于NativeActivity）
-        var navBar: LinearLayout? = null
+        var navBarVar: LinearLayout? = null
         
         // 方法1：尝试从WindowManager overlay中查找
         overlayViewRef?.get()?.let { overlay ->
@@ -1526,14 +1528,14 @@ class XposedHook : IXposedHookLoadPackage {
                 // overlay的最后一个子元素是底部导航栏
                 val lastChild = overlay.getChildAt(overlay.childCount - 1)
                 if (lastChild is LinearLayout) {
-                    navBar = lastChild
+                    navBarVar = lastChild
                     logToAll("Found nav bar in WindowManager overlay")
                 }
             }
         }
         
         // 方法2：如果overlay中没有，尝试从Activity的ContentView中查找（适用于普通Activity）
-        if (navBar == null) {
+        if (navBarVar == null) {
             val contentView = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
             if (contentView != null && contentView.childCount > 0) {
                 val firstChild = contentView.getChildAt(0)
@@ -1541,13 +1543,14 @@ class XposedHook : IXposedHookLoadPackage {
                     // 找到底部导航栏（最后一个子元素）
                     val lastChild = firstChild.getChildAt(firstChild.childCount - 1)
                     if (lastChild is LinearLayout) {
-                        navBar = lastChild
+                        navBarVar = lastChild
                         logToAll("Found nav bar in Activity content")
                     }
                 }
             }
         }
         
+        val navBar = navBarVar
         if (navBar == null) {
             logToAll("Navigation bar not found")
             return
