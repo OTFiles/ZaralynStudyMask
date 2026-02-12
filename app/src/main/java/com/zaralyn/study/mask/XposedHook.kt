@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -788,7 +789,7 @@ class XposedHook : IXposedHookLoadPackage {
             // 设置标志，防止setContentView Hook的递归调用
             isReplacingUI.set(true)
             try {
-                activity.setContentView(frameLayout)
+                activity.setContentView(frameLayout as View)
             } finally {
                 isReplacingUI.set(false)
             }
