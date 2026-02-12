@@ -207,7 +207,12 @@ class XposedHook : IXposedHookLoadPackage {
                             // 因为每次启动都是新的Activity实例，不会重复替换
                             activity.window.decorView.post {
                                 try {
-                                    replaceActivityUI(activity, prefs)
+                                    // 再次检查Activity状态
+                                    if (!activity.isFinishing && !activity.isDestroyed) {
+                                        replaceActivityUI(activity, prefs)
+                                    } else {
+                                        logToAll("Activity is finishing or destroyed in post callback, skipping UI replacement")
+                                    }
                                 } catch (e: Exception) {
                                     logToAll("Failed to replace UI: ${e.message}")
                                     e.printStackTrace()
@@ -714,6 +719,12 @@ class XposedHook : IXposedHookLoadPackage {
         logToAll("Replacing activity UI")
         
         try {
+            // 检查Activity是否已经完成初始化
+            if (activity.isFinishing || activity.isDestroyed) {
+                logToAll("Activity is finishing or destroyed, skipping UI replacement")
+                return
+            }
+            
             // 检查是否是 NativeActivity，如果是则使用 WindowManager 覆盖方案
             var isNativeActivity = activity.javaClass.name == "android.app.NativeActivity" ||
                                    activity.javaClass.superclass?.name == "android.app.NativeActivity"
@@ -741,9 +752,17 @@ class XposedHook : IXposedHookLoadPackage {
             val decorView = activity.window.decorView
             val contentView = decorView.findViewById<ViewGroup>(android.R.id.content)
             
-            if (contentView != null && contentView.childCount > 0) {
+            // 检查ContentView是否存在且有效
+            if (contentView == null) {
+                logToAll("ContentView is null, skipping UI replacement")
+                return
+            }
+            
+            if (contentView.childCount > 0) {
                 val originalView = contentView.getChildAt(0)
                 logToAll("Original view: ${originalView.javaClass.name}")
+            } else {
+                logToAll("ContentView has no children, but will proceed with UI replacement")
             }
             
             // 创建并设置新 UI
