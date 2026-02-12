@@ -30,9 +30,9 @@ class WindowManagerOverlayStrategy(
 
     companion object {
         private const val TAG = "WindowManagerOverlayStrategy"
-        
+
         // 用于保存WindowManager overlay的引用，以便后续刷新和清理
-        private val overlayViewRef = WeakReference<View>(null)
+        private var overlayViewRef = WeakReference<View>(null)
     }
 
     override fun getName(): String = "WindowManagerOverlayStrategy"

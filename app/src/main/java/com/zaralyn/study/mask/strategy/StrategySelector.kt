@@ -91,13 +91,15 @@ object StrategySelector {
      * 创建策略实例
      */
     private fun createStrategy(type: UIReplacementStrategy.Type): UIReplacementStrategy {
+        val maskUIProvider = com.zaralyn.study.mask.strategy.strategies.DefaultMaskUIProvider()
+
         return when (type) {
             UIReplacementStrategy.Type.WINDOW_MANAGER_OVERLAY ->
-                WindowManagerOverlayStrategy()
+                WindowManagerOverlayStrategy(maskUIProvider)
             UIReplacementStrategy.Type.DECOR_VIEW_MODIFICATION ->
-                DecorViewModificationStrategy()
+                DecorViewModificationStrategy(maskUIProvider)
             UIReplacementStrategy.Type.FRAME_LAYOUT_WRAPPER ->
-                FrameLayoutWrapperStrategy()
+                FrameLayoutWrapperStrategy(maskUIProvider)
         }
     }
     

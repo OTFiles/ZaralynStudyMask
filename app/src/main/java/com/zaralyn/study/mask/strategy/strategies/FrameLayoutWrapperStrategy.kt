@@ -8,6 +8,7 @@ import com.zaralyn.study.mask.logger.Logger
 import com.zaralyn.study.mask.strategy.ReplacementResult
 import com.zaralyn.study.mask.strategy.UIReplacementContext
 import com.zaralyn.study.mask.strategy.UIReplacementStrategy
+import java.lang.ref.WeakReference
 
 /**
  * FrameLayout包装策略

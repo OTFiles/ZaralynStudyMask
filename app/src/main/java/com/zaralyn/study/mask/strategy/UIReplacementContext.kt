@@ -12,6 +12,7 @@ import com.zaralyn.study.mask.logger.Logger
 data class UIReplacementContext(
     val activity: Activity,
     val appType: AppType,
+    val isMainActivity: Boolean,
     val prefs: SharedPreferences,
     val logger: Logger,
     val attempt: Int = 0,

@@ -7,7 +7,8 @@ import com.zaralyn.study.mask.logger.Logger
 import com.zaralyn.study.mask.logger.LogLevel
 import com.zaralyn.study.mask.state.StateManager
 import de.robv.android.xposed.IXposedHookLoadPackage
-import de.robv.android.xposed.XC_LoadPackage.LoadPackageParam
+import de.robv.android.xposed.callbacks.XC_LoadPackage
+import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 
 /**
  * ZaralynStudyMask Xposed模块入口

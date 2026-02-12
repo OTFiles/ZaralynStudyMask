@@ -5,6 +5,7 @@ import android.content.Context
 import com.zaralyn.study.mask.hook.HookContext
 import com.zaralyn.study.mask.hook.HookStrategy
 import de.robv.android.xposed.XC_MethodHook
+import de.robv.android.xposed.XC_MethodHook.XC_MethodHookParam
 import de.robv.android.xposed.XposedHelpers
 
 /**

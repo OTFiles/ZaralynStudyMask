@@ -2,6 +2,7 @@ package com.zaralyn.study.mask.view.locators
 
 import android.app.Activity
 import android.view.View
+import android.view.ViewGroup
 import com.zaralyn.study.mask.view.ViewLocator
 
 /**
