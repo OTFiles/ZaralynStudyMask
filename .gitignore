@@ -44,3 +44,5 @@ Thumbs.db
 # AI assistant documentation
 AGENTS.md
 error.md
+
+*.log
