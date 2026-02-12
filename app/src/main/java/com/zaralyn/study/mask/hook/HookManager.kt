@@ -73,11 +73,12 @@ class HookManager(
     
     /**
      * 安装所有Hook
+     * 注意：在Hook安装阶段无法获取SharedPreferences，实际使用时在UI替换阶段通过Activity获取
      */
     fun installHooks() {
         var successCount = 0
         var failCount = 0
-        
+
         strategies.forEach { strategy ->
             try {
                 val context = HookContext.create(
@@ -86,10 +87,10 @@ class HookManager(
                     isMainActivity = false, // 将在Hook执行时确定
                     mainActivityClass = appTypeDetector.getMainActivityClass(),
                     intent = null, // 将在Hook执行时获取
-                    prefs = stateManager.getSharedPreferences(),
+                    prefs = null, // 在Hook安装阶段无法获取SharedPreferences，在UI替换时通过Activity获取
                     logger = logger
                 )
-                
+
                 if (strategy.install(context)) {
                     successCount++
                     logger.info("Installed hook: ${strategy.getName()}")
@@ -102,7 +103,7 @@ class HookManager(
                 logger.error("Error installing hook ${strategy.getName()}: ${e.message}", e)
             }
         }
-        
+
         logger.info("Hook installation complete: $successCount succeeded, $failCount failed")
     }
     
@@ -156,19 +157,27 @@ class HookManager(
     private fun handleUIReplacement(activity: Activity, hookContext: HookContext) {
         try {
             logger.info("Replacing UI for ${activity.javaClass.name}")
-            
+
+            // 通过Activity获取SharedPreferences
+            val prefs = try {
+                activity.getSharedPreferences("zaralyn_mask_prefs", android.content.Context.MODE_PRIVATE)
+            } catch (e: Exception) {
+                logger.debug("Could not get SharedPreferences: ${e.message}")
+                null
+            }
+
             // 创建UI替换上下文
             val replacementContext = UIReplacementContext(
                 activity = activity,
                 appType = hookContext.appType,
                 isMainActivity = hookContext.isMainActivity,
-                prefs = hookContext.prefs,
+                prefs = prefs,
                 logger = hookContext.logger
             )
-            
+
             // 使用StrategySelector执行UI替换
             val result = StrategySelector.replaceUI(replacementContext)
-            
+
             when (result) {
                 is com.zaralyn.study.mask.strategy.ReplacementResult.Success -> {
                     logger.info("UI replacement succeeded for ${activity.javaClass.name}")
@@ -180,7 +189,7 @@ class HookManager(
                     logger.info("UI replacement skipped for ${activity.javaClass.name}")
                 }
             }
-            
+
         } catch (e: Exception) {
             logger.error("Error in handleUIReplacement: ${e.message}", e)
         }

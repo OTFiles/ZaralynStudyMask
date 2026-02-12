@@ -127,6 +127,7 @@ class AppTypeDetector(
 
     /**
      * 获取主Activity类名
+     * 使用 PackageManager API 查询，兼容所有 Android 版本
      */
     fun getMainActivityClass(): String? {
         cachedMainActivityClass?.let { return it }
@@ -134,17 +135,63 @@ class AppTypeDetector(
         try {
             val activityThreadClass = XposedHelpers.findClass("android.app.ActivityThread", classLoader)
             val currentActivityThread = XposedHelpers.callStaticMethod(activityThreadClass, "currentActivityThread")
-            val packageNameField = XposedHelpers.getObjectField(currentActivityThread, "mBoundApplication")
 
-            if (packageNameField != null) {
-                val info = XposedHelpers.getObjectField(packageNameField, "info")
-                val activityInfo = XposedHelpers.getObjectField(info, "activityInfo")
-                val mainActivityClass = XposedHelpers.getObjectField(activityInfo, "name") as? String
+            // 获取 Context
+            var context: android.content.Context? = null
 
-                if (mainActivityClass != null) {
-                    cachedMainActivityClass = mainActivityClass
-                    return mainActivityClass
+            // 尝试获取 mSystemContext
+            try {
+                val systemContext = XposedHelpers.getObjectField(currentActivityThread, "mSystemContext")
+                if (systemContext is android.content.Context) {
+                    context = systemContext
                 }
+            } catch (e: Exception) {
+                logger.debug("Could not get mSystemContext: ${e.message}")
+            }
+
+            // 如果获取失败，尝试获取 mInitialApplication
+            if (context == null) {
+                try {
+                    val initialApp = XposedHelpers.getObjectField(currentActivityThread, "mInitialApplication")
+                    if (initialApp is android.content.Context) {
+                        context = initialApp
+                    }
+                } catch (e: Exception) {
+                    logger.debug("Could not get mInitialApplication: ${e.message}")
+                }
+            }
+
+            if (context == null) {
+                logger.debug("Could not get Context from ActivityThread")
+                return null
+            }
+
+            // 方法1: PackageManager.getLaunchIntentForPackage()
+            val packageManager = context.packageManager
+            val intent = packageManager.getLaunchIntentForPackage(packageName)
+
+            if (intent != null) {
+                val component = intent.component
+                if (component != null) {
+                    val className = component.className
+                    logger.debug("Found main activity via PackageManager: $className")
+                    cachedMainActivityClass = className
+                    return className
+                }
+            }
+
+            // 方法2: queryIntentActivities()
+            val mainIntent = android.content.Intent(android.content.Intent.ACTION_MAIN)
+            mainIntent.addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+            mainIntent.`package` = packageName
+
+            val resolveInfos = packageManager.queryIntentActivities(mainIntent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+            if (resolveInfos.isNotEmpty()) {
+                val resolveInfo = resolveInfos[0]
+                val className = resolveInfo.activityInfo.name
+                logger.debug("Found main activity via queryIntentActivities: $className")
+                cachedMainActivityClass = className
+                return className
             }
         } catch (e: Exception) {
             logger.debug("Error getting main activity class: ${e.message}")

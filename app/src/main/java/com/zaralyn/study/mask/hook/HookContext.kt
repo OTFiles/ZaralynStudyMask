@@ -18,17 +18,17 @@ data class HookContext(
     val isMainActivity: Boolean,
     val mainActivityClass: String?,
     val intent: Intent?,
-    val prefs: SharedPreferences,
+    val prefs: SharedPreferences?,  // 改为可选
     val logger: Logger
 ) {
-    
+
     /**
      * 获取Activity实例（如果在afterHooked中可用）
      */
     fun getActivity(): Activity? {
         return null // 由具体的Hook实现填充
     }
-    
+
     /**
      * 检查是否应该显示原应用
      */
@@ -39,15 +39,15 @@ data class HookContext(
                 return true
             }
         }
-        
-        // 检查SharedPreferences
-        if (prefs.getBoolean("show_original_app", false)) {
+
+        // 检查SharedPreferences（如果可用）
+        if (prefs != null && prefs.getBoolean("show_original_app", false)) {
             return true
         }
-        
+
         return false
     }
-    
+
     companion object {
         fun create(
             lpparam: XC_LoadPackage.LoadPackageParam,
@@ -55,7 +55,7 @@ data class HookContext(
             isMainActivity: Boolean,
             mainActivityClass: String?,
             intent: Intent?,
-            prefs: SharedPreferences,
+            prefs: SharedPreferences?,  // 改为可选
             logger: Logger
         ): HookContext {
             return HookContext(
