@@ -794,40 +794,16 @@ class XposedHook : IXposedHookLoadPackage {
                 }
             }
             
-            // 保存原视图
-            val decorView = activity.window.decorView
-            val contentView = decorView.findViewById<ViewGroup>(android.R.id.content)
-
-            // 检查ContentView是否存在且有效
-            if (contentView == null) {
-                logToAll("ContentView is null, skipping UI replacement")
+            // 检查是否已经被替换过（防止重复替换）
+            if (overlayViewRef?.get() != null) {
+                logToAll("Overlay already exists, skipping duplicate replacement")
                 return
             }
 
-            // 检查是否已经被替换过（防止重复替换）
-            if (contentView.childCount > 0) {
-                val firstChild = contentView.getChildAt(0)
-                if (firstChild is LinearLayout && firstChild.id == android.R.id.custom) {
-                    logToAll("UI already replaced, skipping duplicate replacement")
-                    return
-                }
-            }
-
-            // 创建并设置新的 UI（直接替换，不使用FrameLayout包装）
-            val newUI = createMaskUI(activity, prefs)
-            newUI.id = android.R.id.custom  // 使用预定义的ID标识新UI
-
-            // 设置标志，防止setContentView Hook的递归调用
-            isReplacingUI.set(true)
-            try {
-                activity.setContentView(newUI)
-            } finally {
-                isReplacingUI.set(false)
-            }
-
-            setupKeyListener(activity, prefs)
-
-            logToAll("UI replaced successfully (direct replacement method)")
+            // 使用 WindowManager 覆盖层方案（不改变原视图结构，避免异步代码引用失效）
+            logToAll("Using WindowManager overlay for standard activity")
+            replaceNativeActivityUI(activity, prefs)
+            return
         } catch (e: Exception) {
             logToAll("Failed to replace UI: ${e.message}")
             e.printStackTrace()
