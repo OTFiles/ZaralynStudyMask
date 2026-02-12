@@ -203,21 +203,11 @@ class XposedHook : IXposedHookLoadPackage {
                             }
                             
                             logToAll("Replacing UI via ActivityThread hook")
-                            
-                            // 直接进行UI替换，不检查KEY_UI_REPLACED标志
-                            // 因为每次启动都是新的Activity实例，不会重复替换
+
+                            // 延迟UI替换，等待ContentView有内容后再进行
+                            // 这样可以避免在原应用UI未初始化完成时就进行替换，导致原应用的异步代码崩溃
                             activity.window.decorView.post {
-                                try {
-                                    // 再次检查Activity状态
-                                    if (!activity.isFinishing && !activity.isDestroyed) {
-                                        replaceActivityUI(activity, prefs)
-                                    } else {
-                                        logToAll("Activity is finishing or destroyed in post callback, skipping UI replacement")
-                                    }
-                                } catch (e: Exception) {
-                                    logToAll("Failed to replace UI: ${e.message}")
-                                    e.printStackTrace()
-                                }
+                                replaceActivityUIWithDelay(activity, prefs, 0)
                             }
                         } catch (e: Exception) {
                             logToAll("Error in performLaunchActivity hook: ${e.message}")
@@ -316,16 +306,10 @@ class XposedHook : IXposedHookLoadPackage {
                                 }
                                 
                                 logToAll("Replacing UI via ActivityThread hook")
-                                
-                                // 直接进行UI替换，不检查KEY_UI_REPLACED标志
-                                // 因为每次启动都是新的Activity实例，不会重复替换
+
+                                // 延迟UI替换，等待ContentView有内容后再进行
                                 activity.window.decorView.post {
-                                    try {
-                                        replaceActivityUI(activity, prefs)
-                                    } catch (e: Exception) {
-                                        logToAll("Failed to replace UI: ${e.message}")
-                                        e.printStackTrace()
-                                    }
+                                    replaceActivityUIWithDelay(activity, prefs, 0)
                                 }
                             } catch (e: Exception) {
                                 logToAll("Error in performLaunchActivity hook: ${e.message}")
@@ -599,6 +583,45 @@ class XposedHook : IXposedHookLoadPackage {
             )
         } catch (e: Exception) {
             logToAll("Failed to hook LayoutInflater: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+
+    // 延迟UI替换，等待ContentView有内容后再进行
+    // 这样可以避免在原应用UI未初始化完成时就进行替换，导致原应用的异步代码崩溃
+    private fun replaceActivityUIWithDelay(activity: Activity, prefs: android.content.SharedPreferences, attempt: Int) {
+        try {
+            // 检查Activity状态
+            if (activity.isFinishing || activity.isDestroyed) {
+                logToAll("Activity is finishing or destroyed, skipping UI replacement")
+                return
+            }
+
+            val maxAttempts = 10
+            val delayMs = 50L
+
+            if (attempt >= maxAttempts) {
+                logToAll("Reached max attempts ($maxAttempts), proceeding with UI replacement anyway")
+                replaceActivityUI(activity, prefs)
+                return
+            }
+
+            val decorView = activity.window.decorView
+            val contentView = decorView.findViewById<ViewGroup>(android.R.id.content)
+
+            if (contentView == null || contentView.childCount == 0) {
+                // ContentView还没有内容，延迟后重试
+                logToAll("ContentView is empty (attempt $attempt/$maxAttempts), will retry in ${delayMs}ms")
+                decorView.postDelayed({
+                    replaceActivityUIWithDelay(activity, prefs, attempt + 1)
+                }, delayMs)
+            } else {
+                // ContentView有内容，可以进行UI替换
+                logToAll("ContentView has ${contentView.childCount} children, proceeding with UI replacement")
+                replaceActivityUI(activity, prefs)
+            }
+        } catch (e: Exception) {
+            logToAll("Error in replaceActivityUIWithDelay: ${e.message}")
             e.printStackTrace()
         }
     }
