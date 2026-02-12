@@ -5,7 +5,6 @@ import android.view.View
 import com.zaralyn.study.mask.hook.HookContext
 import com.zaralyn.study.mask.hook.HookStrategy
 import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XC_MethodHook.XC_MethodHookParam
 import de.robv.android.xposed.XposedHelpers
 
 /**
@@ -96,7 +95,7 @@ class SetContentViewHook(
     /**
      * 处理 setContentView Hook
      */
-    private fun handleSetContentViewHook(param: XC_MethodHookParam, context: HookContext, methodName: String) {
+    private fun handleSetContentViewHook(param: MethodHookParam, context: HookContext, methodName: String) {
         try {
             // 检查是否正在替换 UI，防止递归
             if (isReplacingUI.get() == true) {

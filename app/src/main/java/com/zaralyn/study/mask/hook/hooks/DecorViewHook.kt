@@ -5,7 +5,6 @@ import android.content.Context
 import com.zaralyn.study.mask.hook.HookContext
 import com.zaralyn.study.mask.hook.HookStrategy
 import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XC_MethodHook.XC_MethodHookParam
 import de.robv.android.xposed.XposedHelpers
 
 /**
@@ -62,7 +61,7 @@ class DecorViewHook(
     /**
      * 处理 DecorView Hook
      */
-    private fun handleDecorViewHook(param: XC_MethodHookParam, context: HookContext, decorViewClass: Class<*>) {
+    private fun handleDecorViewHook(param: MethodHookParam, context: HookContext, decorViewClass: Class<*>) {
         try {
             val view = param.thisObject
 

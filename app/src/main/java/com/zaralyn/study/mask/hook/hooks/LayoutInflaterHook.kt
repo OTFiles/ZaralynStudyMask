@@ -6,7 +6,6 @@ import android.view.ViewGroup
 import com.zaralyn.study.mask.hook.HookContext
 import com.zaralyn.study.mask.hook.HookStrategy
 import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XC_MethodHook.XC_MethodHookParam
 import de.robv.android.xposed.XposedHelpers
 
 /**
@@ -57,7 +56,7 @@ class LayoutInflaterHook : HookStrategy {
      * 处理 LayoutInflater Hook
      * 仅记录日志，不执行 UI 替换
      */
-    private fun handleLayoutInflaterHook(param: XC_MethodHookParam, context: HookContext) {
+    private fun handleLayoutInflaterHook(param: MethodHookParam, context: HookContext) {
         try {
             // 获取 LayoutInflater 的 Context
             val inflaterContext = try {

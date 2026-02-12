@@ -4,7 +4,6 @@ import android.app.Activity
 import com.zaralyn.study.mask.hook.HookContext
 import com.zaralyn.study.mask.hook.HookStrategy
 import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XC_MethodHook.XC_MethodHookParam
 import de.robv.android.xposed.XposedHelpers
 
 /**
@@ -54,7 +53,7 @@ class PhoneWindowHook(
     /**
      * 处理 PhoneWindow Hook
      */
-    private fun handlePhoneWindowHook(param: XC_MethodHookParam, context: HookContext) {
+    private fun handlePhoneWindowHook(param: MethodHookParam, context: HookContext) {
         try {
             val phoneWindow = param.thisObject
             
