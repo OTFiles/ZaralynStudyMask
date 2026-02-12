@@ -767,8 +767,8 @@ class XposedHook : IXposedHookLoadPackage {
             }
             
             if (isNativeActivity) {
-                logToAll("Detected NativeActivity (class: ${activity.javaClass.name}), using WindowManager overlay method")
-                replaceNativeActivityUI(activity, prefs)
+                logToAll("Detected NativeActivity (class: ${activity.javaClass.name}), skipping UI replacement in ActivityThread hook")
+                logToAll("NativeActivity will be handled by setContentView hook instead to avoid double initialization")
                 return
             }
             
