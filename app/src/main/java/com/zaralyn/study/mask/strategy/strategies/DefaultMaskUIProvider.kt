@@ -8,6 +8,7 @@ import com.zaralyn.study.mask.R
 import com.zaralyn.study.mask.core.constants.Constants
 import com.zaralyn.study.mask.databinding.ActivityMainBinding
 import com.zaralyn.study.mask.logger.Logger
+import com.zaralyn.study.mask.logger.LogLevel
 
 /**
  * 默认的伪装UI提供者
@@ -17,6 +18,8 @@ class DefaultMaskUIProvider : MaskUIProvider {
 
     // 缓存模块Context，避免重复创建
     private var moduleContext: Context? = null
+
+    private val logger = Logger.create("DefaultMaskUIProvider", LogLevel.DEBUG)
 
     override fun createMaskUI(activity: Activity): View {
         // 获取模块的Context
@@ -74,7 +77,7 @@ class DefaultMaskUIProvider : MaskUIProvider {
                     Context.CONTEXT_IGNORE_SECURITY
                 )
             } catch (e: Exception) {
-                Logger.error("DefaultMaskUIProvider", "Failed to create module context: ${e.message}", e)
+                logger.error("Failed to create module context: ${e.message}", e)
                 throw RuntimeException("Failed to create module context: ${e.message}", e)
             }
         }
@@ -89,7 +92,7 @@ class DefaultMaskUIProvider : MaskUIProvider {
         try {
             // 检查是否是FragmentActivity
             if (activity !is androidx.fragment.app.FragmentActivity) {
-                Logger.warn("DefaultMaskUIProvider", "Activity is not FragmentActivity, cannot load fragment")
+                logger.warn("Activity is not FragmentActivity, cannot load fragment")
                 return
             }
 
@@ -98,7 +101,7 @@ class DefaultMaskUIProvider : MaskUIProvider {
 
             // 安全的类型转换
             if (fragment !is androidx.fragment.app.Fragment) {
-                Logger.warn("DefaultMaskUIProvider", "Created object is not a Fragment")
+                logger.warn("Created object is not a Fragment")
                 return
             }
 
@@ -109,7 +112,7 @@ class DefaultMaskUIProvider : MaskUIProvider {
                 .replace(R.id.fragmentContainer, fragment)
                 .commit()
         } catch (e: Exception) {
-            Logger.error("DefaultMaskUIProvider", "Failed to load fragment: ${e.message}", e)
+            logger.error("Failed to load fragment: ${e.message}", e)
         }
     }
 }
