@@ -1,5 +1,6 @@
 package com.zaralyn.study.mask.ui.fragments
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -13,8 +14,10 @@ import com.zaralyn.study.mask.R
 import com.zaralyn.study.mask.ReaderActivity
 import com.zaralyn.study.mask.adapter.BookAdapter
 import com.zaralyn.study.mask.adapter.GradeAdapter
+import com.zaralyn.study.mask.core.constants.Constants
 import com.zaralyn.study.mask.data.BookData
 import com.zaralyn.study.mask.databinding.FragmentHomeBinding
+import com.zaralyn.study.mask.logger.Logger
 import com.zaralyn.study.mask.model.Grade
 
 class HomeFragment : Fragment() {
@@ -25,6 +28,9 @@ class HomeFragment : Fragment() {
     private var currentGrade = Grade.GRADE_10
     private lateinit var gradeAdapter: GradeAdapter
     private lateinit var bookAdapter: BookAdapter
+
+    // 模块Context缓存
+    private var moduleContext: Context? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -42,8 +48,29 @@ class HomeFragment : Fragment() {
         setupBookList()
     }
 
+    /**
+     * 获取模块的Context
+     */
+    private fun getModuleContext(): Context {
+        if (moduleContext == null) {
+            try {
+                moduleContext = requireContext().createPackageContext(
+                    Constants.PACKAGE_NAME,
+                    Context.CONTEXT_IGNORE_SECURITY
+                )
+            } catch (e: Exception) {
+                Logger.error("HomeFragment", "Failed to create module context: ${e.message}", e)
+                // 降级使用当前Context
+                moduleContext = requireContext()
+            }
+        }
+        return moduleContext!!
+    }
+
     private fun setupGradeSelection() {
+        val ctx = getModuleContext()
         gradeAdapter = GradeAdapter(
+            moduleContext = ctx,
             grades = listOf(Grade.GRADE_10, Grade.GRADE_11, Grade.GRADE_12),
             onGradeSelected = { grade ->
                 currentGrade = grade
@@ -64,7 +91,8 @@ class HomeFragment : Fragment() {
     }
 
     private fun createGradeView(grade: Grade): View {
-        val inflater = LayoutInflater.from(requireContext())
+        val ctx = getModuleContext()
+        val inflater = LayoutInflater.from(ctx)
         val gradeView = inflater.inflate(R.layout.item_grade_card, binding.gradeContainer, false)
 
         gradeView.setOnClickListener {
@@ -78,32 +106,23 @@ class HomeFragment : Fragment() {
         currentGrade = grade
 
         // 更新所有年级卡片的选中状态
+        val ctx = getModuleContext()
         for (i in 0 until binding.gradeContainer.childCount) {
             val child = binding.gradeContainer.getChildAt(i)
-            val isSelected = when (i) {
-                0 -> grade == Grade.GRADE_10
-                1 -> grade == Grade.GRADE_11
-                2 -> grade == Grade.GRADE_12
-                else -> false
-            }
+            val contentLayout = child.findViewById<LinearLayout>(R.id.contentLayout)
+            val gradeName = child.findViewById<android.widget.TextView>(R.id.gradeName)
+            val gradeIcon = child.findViewById<android.widget.ImageView>(R.id.gradeIcon)
 
-            val contentLayout = child.findViewById<LinearLayout>(R.id.gradeCardContent)
-            if (isSelected) {
-                contentLayout.setBackgroundColor(requireContext().getColor(R.color.md_theme_primary))
-                child.findViewById<android.widget.TextView>(R.id.gradeName).setTextColor(
-                    requireContext().getColor(R.color.white)
-                )
-                child.findViewById<android.widget.ImageView>(R.id.gradeIcon).setColorFilter(
-                    requireContext().getColor(R.color.white)
-                )
+            if (child.tag == grade) {
+                // 选中状态
+                contentLayout.setBackgroundColor(ctx.getColor(R.color.md_theme_primary))
+                gradeName.setTextColor(ctx.getColor(R.color.white))
+                gradeIcon.setColorFilter(ctx.getColor(R.color.white))
             } else {
-                contentLayout.setBackgroundColor(requireContext().getColor(R.color.gray_light))
-                child.findViewById<android.widget.TextView>(R.id.gradeName).setTextColor(
-                    requireContext().getColor(R.color.text_primary)
-                )
-                child.findViewById<android.widget.ImageView>(R.id.gradeIcon).setColorFilter(
-                    requireContext().getColor(R.color.md_theme_primary)
-                )
+                // 未选中状态
+                contentLayout.setBackgroundColor(ctx.getColor(R.color.md_theme_surfaceContainer))
+                gradeName.setTextColor(ctx.getColor(R.color.text_primary))
+                gradeIcon.setColorFilter(ctx.getColor(R.color.md_theme_primary))
             }
         }
 
@@ -112,10 +131,12 @@ class HomeFragment : Fragment() {
 
     private fun setupBookList() {
         bookAdapter = BookAdapter(
+            books = BookData.getBooksForGrade(currentGrade),
             onBookClicked = { book ->
-                val intent = Intent(requireContext(), ReaderActivity::class.java)
-                intent.putExtra(ReaderActivity.EXTRA_BOOK_FILE_NAME, book.fileName)
-                intent.putExtra(ReaderActivity.EXTRA_BOOK_TITLE, book.title)
+                val intent = Intent(requireContext(), ReaderActivity::class.java).apply {
+                    putExtra("title", book.title)
+                    putExtra("filename", book.filename)
+                }
                 startActivity(intent)
             }
         )
@@ -124,13 +145,10 @@ class HomeFragment : Fragment() {
             layoutManager = GridLayoutManager(requireContext(), 2)
             adapter = bookAdapter
         }
-
-        updateBookList()
     }
 
     private fun updateBookList() {
-        val books = BookData.getBooksForGrade(currentGrade)
-        bookAdapter.submitList(books)
+        bookAdapter.updateBooks(BookData.getBooksForGrade(currentGrade))
     }
 
     override fun onDestroyView() {

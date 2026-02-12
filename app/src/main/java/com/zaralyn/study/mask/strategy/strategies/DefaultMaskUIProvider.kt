@@ -5,7 +5,9 @@ import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
 import com.zaralyn.study.mask.R
+import com.zaralyn.study.mask.core.constants.Constants
 import com.zaralyn.study.mask.databinding.ActivityMainBinding
+import com.zaralyn.study.mask.logger.Logger
 
 /**
  * 默认的伪装UI提供者
@@ -13,10 +15,19 @@ import com.zaralyn.study.mask.databinding.ActivityMainBinding
  */
 class DefaultMaskUIProvider : MaskUIProvider {
 
+    // 缓存模块Context，避免重复创建
+    private var moduleContext: Context? = null
+
     override fun createMaskUI(activity: Activity): View {
-        // 使用 DataBinding 创建布局
+        // 获取模块的Context
+        val ctx = getModuleContext(activity)
+
+        // 使用模块的Context创建LayoutInflater
+        val inflater = LayoutInflater.from(ctx)
+
+        // 使用模块的Context创建DataBinding
         val binding = ActivityMainBinding.inflate(
-            LayoutInflater.from(activity),
+            inflater,
             null,
             false
         )
@@ -50,22 +61,55 @@ class DefaultMaskUIProvider : MaskUIProvider {
     }
 
     /**
+     * 获取模块的Context
+     * 使用 createPackageContext 创建模块的Context，用于访问模块资源
+     */
+    private fun getModuleContext(activity: Activity): Context {
+        // 缓存模块Context
+        if (moduleContext == null) {
+            try {
+                // 创建模块的Context，忽略安全检查
+                moduleContext = activity.createPackageContext(
+                    Constants.PACKAGE_NAME,
+                    Context.CONTEXT_IGNORE_SECURITY
+                )
+            } catch (e: Exception) {
+                Logger.error("DefaultMaskUIProvider", "Failed to create module context: ${e.message}", e)
+                throw RuntimeException("Failed to create module context: ${e.message}", e)
+            }
+        }
+        return moduleContext!!
+    }
+
+    /**
      * 加载 Fragment
      * 由于我们不在 Activity 中，需要使用反射来创建 Fragment 实例
      */
     private fun loadFragment(activity: Activity, fragmentClassName: String) {
         try {
+            // 检查是否是FragmentActivity
+            if (activity !is androidx.fragment.app.FragmentActivity) {
+                Logger.warn("DefaultMaskUIProvider", "Activity is not FragmentActivity, cannot load fragment")
+                return
+            }
+
             val fragmentClass = Class.forName(fragmentClassName)
-            val fragment = fragmentClass.newInstance() as androidx.fragment.app.Fragment
+            val fragment = fragmentClass.newInstance()
+
+            // 安全的类型转换
+            if (fragment !is androidx.fragment.app.Fragment) {
+                Logger.warn("DefaultMaskUIProvider", "Created object is not a Fragment")
+                return
+            }
 
             // 获取 FragmentManager
-            val fragmentManager = (activity as androidx.fragment.app.FragmentActivity).supportFragmentManager
+            val fragmentManager = activity.supportFragmentManager
 
             fragmentManager.beginTransaction()
                 .replace(R.id.fragmentContainer, fragment)
                 .commit()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Logger.error("DefaultMaskUIProvider", "Failed to load fragment: ${e.message}", e)
         }
     }
 }

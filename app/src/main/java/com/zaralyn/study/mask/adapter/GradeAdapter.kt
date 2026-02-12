@@ -1,5 +1,6 @@
 package com.zaralyn.study.mask.adapter
 
+import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -10,6 +11,7 @@ import com.zaralyn.study.mask.R
 import com.zaralyn.study.mask.model.Grade
 
 class GradeAdapter(
+    private val moduleContext: Context,
     private val grades: List<Grade>,
     private val onGradeSelected: (Grade) -> Unit
 ) : RecyclerView.Adapter<GradeAdapter.GradeViewHolder>() {
@@ -22,7 +24,7 @@ class GradeAdapter(
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): GradeViewHolder {
-        val view = LayoutInflater.from(parent.context)
+        val view = LayoutInflater.from(moduleContext)
             .inflate(R.layout.item_grade_card, parent, false)
         return GradeViewHolder(view)
     }
@@ -43,13 +45,13 @@ class GradeAdapter(
             gradeName.text = grade.displayName
 
             if (isSelected) {
-                cardView.setCardBackgroundColor(itemView.context.getColor(R.color.md_theme_primary))
-                gradeName.setTextColor(itemView.context.getColor(R.color.white))
-                gradeIcon.setColorFilter(itemView.context.getColor(R.color.white))
+                cardView.setCardBackgroundColor(moduleContext.getColor(R.color.md_theme_primary))
+                gradeName.setTextColor(moduleContext.getColor(R.color.white))
+                gradeIcon.setColorFilter(moduleContext.getColor(R.color.white))
             } else {
-                cardView.setCardBackgroundColor(itemView.context.getColor(R.color.md_theme_surfaceContainer))
-                gradeName.setTextColor(itemView.context.getColor(R.color.text_primary))
-                gradeIcon.setColorFilter(itemView.context.getColor(R.color.md_theme_primary))
+                cardView.setCardBackgroundColor(moduleContext.getColor(R.color.md_theme_surfaceContainer))
+                gradeName.setTextColor(moduleContext.getColor(R.color.text_primary))
+                gradeIcon.setColorFilter(moduleContext.getColor(R.color.md_theme_primary))
             }
 
             itemView.setOnClickListener {
