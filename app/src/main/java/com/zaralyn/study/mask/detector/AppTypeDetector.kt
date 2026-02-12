@@ -49,36 +49,97 @@ class AppTypeDetector(
 
     /**
      * 检测是否是NativeActivity
+     * 使用多种兼容性检测方法，避免因字段不存在导致崩溃
      */
     private fun isNativeActivity(): Boolean {
         try {
-            // 检查主Activity类名
+            // 方法1: 检查主Activity类名
             val mainActivityClass = getMainActivityClass()
             if (mainActivityClass != null) {
                 if (mainActivityClass == "android.app.NativeActivity" ||
                     mainActivityClass.contains("NativeActivity")) {
+                    logger.debug("Detected NativeActivity via class name: $mainActivityClass")
                     return true
                 }
             }
 
-            // 检查是否有NativeContentView
-            val activityThreadClass = XposedHelpers.findClass("android.app.ActivityThread", classLoader)
-            val currentActivityThread = XposedHelpers.callStaticMethod(activityThreadClass, "currentActivityThread")
-            val packages = XposedHelpers.getObjectField(currentActivityThread, "mPackages") as? Map<*, *>
-
-            packages?.values?.forEach { pkg ->
-                try {
-                    val loadedLibraries = XposedHelpers.getObjectField(pkg, "mLoadedLibraries") as? Set<*>
-                    if (!loadedLibraries.isNullOrEmpty()) {
-                        logger.debug("Found native libraries: $loadedLibraries")
+            // 方法2: 检查NativeActivity的子类
+            try {
+                val nativeActivityClass = XposedHelpers.findClass("android.app.NativeActivity", classLoader)
+                if (nativeActivityClass != null && mainActivityClass != null) {
+                    val mainActivityClassObj = try {
+                        XposedHelpers.findClass(mainActivityClass, classLoader)
+                    } catch (e: Exception) {
+                        null
+                    }
+                    if (mainActivityClassObj != null && nativeActivityClass.isAssignableFrom(mainActivityClassObj)) {
+                        logger.debug("Detected NativeActivity subclass: $mainActivityClass")
                         return true
                     }
-                } catch (e: Exception) {
-                    // 忽略错误
                 }
+            } catch (e: Exception) {
+                logger.debug("NativeActivity class not found: ${e.message}")
             }
 
-        } catch (e: Exception) {
+            // 方法3: 检查是否有Native库加载（兼容性改进）
+            try {
+                val activityThreadClass = XposedHelpers.findClass("android.app.ActivityThread", classLoader)
+                val currentActivityThread = XposedHelpers.callStaticMethod(activityThreadClass, "currentActivityThread")
+                val packages = XposedHelpers.getObjectField(currentActivityThread, "mPackages") as? Map<*, *>
+
+                packages?.values?.forEach { pkg ->
+                    try {
+                        // 尝试多种字段名，提高兼容性
+                        var loadedLibraries: Set<*>? = null
+
+                        // 尝试字段名1: mLoadedLibraries
+                        try {
+                            loadedLibraries = XposedHelpers.getObjectField(pkg, "mLoadedLibraries") as? Set<*>
+                        } catch (e: NoSuchFieldError) {
+                            logger.debug("Field mLoadedLibraries not found, trying alternatives")
+                        }
+
+                        // 尝试字段名2: mLibraryPath
+                        if (loadedLibraries == null) {
+                            try {
+                                val libraryPath = XposedHelpers.getObjectField(pkg, "mLibraryPath") as? String
+                                if (!libraryPath.isNullOrEmpty()) {
+                                    logger.debug("Found library path: $libraryPath")
+                                    return true
+                                }
+                            } catch (e: NoSuchFieldError) {
+                                logger.debug("Field mLibraryPath not found")
+                            }
+                        }
+
+                        // 尝试字段名3: mNativeLibraryDir
+                        if (loadedLibraries == null) {
+                            try {
+                                val nativeLibDir = XposedHelpers.getObjectField(pkg, "mNativeLibraryDir") as? String
+                                if (!nativeLibDir.isNullOrEmpty()) {
+                                    logger.debug("Found native library dir: $nativeLibDir")
+                                    return true
+                                }
+                            } catch (e: NoSuchFieldError) {
+                                logger.debug("Field mNativeLibraryDir not found")
+                            }
+                        }
+
+                        if (!loadedLibraries.isNullOrEmpty()) {
+                            logger.debug("Found native libraries: $loadedLibraries")
+                            return true
+                        }
+                    } catch (e: Throwable) {
+                        // 捕获所有异常，包括 Error
+                        logger.debug("Error checking native libraries: ${e.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                logger.debug("Error checking ActivityThread: ${e.message}")
+            }
+
+        } catch (e: Throwable) {
+            // 捕获所有异常，包括 Error
             logger.debug("Error checking NativeActivity: ${e.message}")
         }
 

@@ -57,12 +57,18 @@ class XposedHook : IXposedHookLoadPackage {
             hookManagers[packageName] = hookManager
 
             // 安装所有Hook
-            hookManager.installHooks()
+            try {
+                hookManager.installHooks()
+                logger.info("All hooks installed successfully for $packageName")
+            } catch (e: Throwable) {
+                logger.error("Failed to install hooks for $packageName: ${e.message}", e)
+                // 不重新抛出异常，让模块继续运行
+            }
 
-            logger.info("All hooks installed successfully for $packageName")
-
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // 捕获所有异常，包括 Error
             logger.error("Failed to load hook for ${lpparam.packageName}: ${e.message}", e)
+            // 不重新抛出异常，让模块继续运行
         }
     }
 

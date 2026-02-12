@@ -79,13 +79,30 @@ class HookManager(
         var successCount = 0
         var failCount = 0
 
+        // 先获取应用类型，避免在循环中重复获取
+        val appType = try {
+            appTypeDetector.detectAppType()
+        } catch (e: Throwable) {
+            logger.error("Failed to detect app type: ${e.message}", e)
+            logger.warn("Using default app type: STANDARD")
+            AppType.STANDARD  // 使用默认类型
+        }
+
+        // 获取主Activity类名
+        val mainActivityClass = try {
+            appTypeDetector.getMainActivityClass()
+        } catch (e: Throwable) {
+            logger.warn("Failed to get main activity class: ${e.message}")
+            null
+        }
+
         strategies.forEach { strategy ->
             try {
                 val context = HookContext.create(
                     lpparam = lpparam,
-                    appType = appTypeDetector.detectAppType(),
+                    appType = appType,
                     isMainActivity = false, // 将在Hook执行时确定
-                    mainActivityClass = appTypeDetector.getMainActivityClass(),
+                    mainActivityClass = mainActivityClass,
                     intent = null, // 将在Hook执行时获取
                     prefs = null, // 在Hook安装阶段无法获取SharedPreferences，在UI替换时通过Activity获取
                     logger = logger
@@ -98,7 +115,7 @@ class HookManager(
                     failCount++
                     logger.warn("Failed to install hook: ${strategy.getName()}")
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 failCount++
                 logger.error("Error installing hook ${strategy.getName()}: ${e.message}", e)
             }
