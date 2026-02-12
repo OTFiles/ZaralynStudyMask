@@ -759,9 +759,18 @@ class XposedHook : IXposedHookLoadPackage {
                 return
             }
             
+            // 检查是否已经被替换过（防止重复替换）
+            if (contentView.childCount > 0) {
+                val firstChild = contentView.getChildAt(0)
+                if (firstChild is FrameLayout && firstChild.id == android.R.id.custom) {
+                    logToAll("UI already replaced, skipping duplicate replacement")
+                    return
+                }
+            }
+            
             // 使用FrameLayout包装方案，保留原视图
             val frameLayout = FrameLayout(activity)
-            frameLayout.setBackgroundColor(Color.parseColor(COLOR_SURFACE))
+            // 不设置FrameLayout背景色，让maskUI的背景色生效
             frameLayout.id = android.R.id.custom  // 使用预定义的ID标识FrameLayout
             
             // 将原视图添加到FrameLayout中（如果存在）
@@ -825,7 +834,7 @@ class XposedHook : IXposedHookLoadPackage {
         // 可滚动内容区
         val scrollView = ScrollView(activity)
         scrollView.setBackgroundColor(Color.parseColor(COLOR_SURFACE))
-        scrollView.id = android.R.id.custom  // 使用预定义的ID标识ScrollView
+        scrollView.id = android.R.id.text1  // 使用预定义的ID标识ScrollView（避免与FrameLayout的ID冲突）
         
         val contentLayout = createContentLayout(activity, prefs)
         contentLayout.id = android.R.id.list  // 使用预定义的ID标识内容布局
@@ -1149,23 +1158,33 @@ class XposedHook : IXposedHookLoadPackage {
             logToAll("Saved current grade: $gradeLevel to SharedPreferences")
             
             try {
-                // 优先使用WindowManager overlay中的ScrollView（适用于NativeActivity）
                 var scrollViewVar: ScrollView? = null
                 
-                // 方法1：尝试从WindowManager overlay中查找
+                // 方法1：尝试从WindowManager overlay中查找（适用于NativeActivity）
                 overlayViewRef?.get()?.let { overlay ->
-                    scrollViewVar = overlay.findViewById<ScrollView>(android.R.id.custom)
+                    scrollViewVar = overlay.findViewById<ScrollView>(android.R.id.text1)
                     logToAll("Found ScrollView in WindowManager overlay: ${scrollViewVar != null}")
                 }
                 
-                // 方法2：如果overlay中没有，尝试从Activity的ContentView中查找（适用于普通Activity）
+                // 方法2：如果overlay中没有，尝试从Activity的ContentView中查找（适用于FrameLayout包装模式）
                 if (scrollViewVar == null) {
                     val contentView = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
                     if (contentView != null && contentView.childCount > 0) {
                         val firstChild = contentView.getChildAt(0)
-                        if (firstChild is LinearLayout) {
-                            scrollViewVar = firstChild.findViewById<ScrollView>(android.R.id.custom)
-                            logToAll("Found ScrollView in Activity content: ${scrollViewVar != null}")
+                        // 检查是否是FrameLayout（FrameLayout包装模式）
+                        if (firstChild is FrameLayout && firstChild.id == android.R.id.custom) {
+                            // 找到maskUI（最后一个子视图）
+                            if (firstChild.childCount > 0) {
+                                val maskUI = firstChild.getChildAt(firstChild.childCount - 1)
+                                if (maskUI is ViewGroup) {
+                                    scrollViewVar = maskUI.findViewById<ScrollView>(android.R.id.text1)
+                                    logToAll("Found ScrollView in FrameLayout wrapper: ${scrollViewVar != null}")
+                                }
+                            }
+                        } else if (firstChild is LinearLayout) {
+                            // 兼容旧版本逻辑
+                            scrollViewVar = firstChild.findViewById<ScrollView>(android.R.id.text1)
+                            logToAll("Found ScrollView in LinearLayout: ${scrollViewVar != null}")
                         }
                     }
                 }
@@ -1491,23 +1510,33 @@ class XposedHook : IXposedHookLoadPackage {
             }
             
             try {
-                // 优先使用WindowManager overlay中的ScrollView（适用于NativeActivity）
                 var scrollViewVar: ScrollView? = null
                 
-                // 方法1：尝试从WindowManager overlay中查找
+                // 方法1：尝试从WindowManager overlay中查找（适用于NativeActivity）
                 overlayViewRef?.get()?.let { overlay ->
-                    scrollViewVar = overlay.findViewById<ScrollView>(android.R.id.custom)
+                    scrollViewVar = overlay.findViewById<ScrollView>(android.R.id.text1)
                     logToAll("Found ScrollView in WindowManager overlay: ${scrollViewVar != null}")
                 }
                 
-                // 方法2：如果overlay中没有，尝试从Activity的ContentView中查找（适用于普通Activity）
+                // 方法2：如果overlay中没有，尝试从Activity的ContentView中查找（适用于FrameLayout包装模式）
                 if (scrollViewVar == null) {
                     val contentView = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
                     if (contentView != null && contentView.childCount > 0) {
                         val firstChild = contentView.getChildAt(0)
-                        if (firstChild is LinearLayout) {
-                            scrollViewVar = firstChild.findViewById<ScrollView>(android.R.id.custom)
-                            logToAll("Found ScrollView in Activity content: ${scrollViewVar != null}")
+                        // 检查是否是FrameLayout（FrameLayout包装模式）
+                        if (firstChild is FrameLayout && firstChild.id == android.R.id.custom) {
+                            // 找到maskUI（最后一个子视图）
+                            if (firstChild.childCount > 0) {
+                                val maskUI = firstChild.getChildAt(firstChild.childCount - 1)
+                                if (maskUI is ViewGroup) {
+                                    scrollViewVar = maskUI.findViewById<ScrollView>(android.R.id.text1)
+                                    logToAll("Found ScrollView in FrameLayout wrapper: ${scrollViewVar != null}")
+                                }
+                            }
+                        } else if (firstChild is LinearLayout) {
+                            // 兼容旧版本逻辑
+                            scrollViewVar = firstChild.findViewById<ScrollView>(android.R.id.text1)
+                            logToAll("Found ScrollView in LinearLayout: ${scrollViewVar != null}")
                         }
                     }
                 }
@@ -1717,9 +1746,22 @@ class XposedHook : IXposedHookLoadPackage {
         
         logToAll("Cleared click count for next launch")
         
+        // 获取原Intent的component
+        val originalComponent = activity.intent?.component
+        val componentName: android.content.ComponentName
+        
+        if (originalComponent != null) {
+            componentName = originalComponent
+            logToAll("Using original component: $componentName")
+        } else {
+            // 如果原Intent为null或component为null，则使用Activity的类名创建新的ComponentName
+            componentName = android.content.ComponentName(activity.packageName, activity.javaClass.name)
+            logToAll("Original component is null, created new component: $componentName")
+        }
+        
         // 创建新的Intent，使用显式Intent确保正确传递
         val intent = Intent()
-        intent.component = activity.intent.component
+        intent.component = componentName
         intent.action = Intent.ACTION_MAIN
         intent.addCategory(Intent.CATEGORY_LAUNCHER)
         intent.putExtra("show_original_app", true)
@@ -1727,7 +1769,7 @@ class XposedHook : IXposedHookLoadPackage {
         // 使用CLEAR_TASK确保完全重新启动，避免复用旧的Intent
         intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK
         
-        logToAll("Starting original app with intent: ${intent.component}, show_original_app=${intent.getBooleanExtra("show_original_app", false)}")
+        logToAll("Starting original app with intent: $componentName, show_original_app=${intent.getBooleanExtra("show_original_app", false)}")
         
         activity.finish()
         activity.startActivity(intent)
