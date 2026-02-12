@@ -3,6 +3,7 @@ package com.zaralyn.study.mask.hook
 import android.app.Activity
 import android.content.Intent
 import com.zaralyn.study.mask.core.config.HookConfig
+import com.zaralyn.study.mask.detector.AppType
 import com.zaralyn.study.mask.detector.AppTypeDetector
 import com.zaralyn.study.mask.hook.hooks.ActivityThreadHook
 import com.zaralyn.study.mask.hook.hooks.DecorViewHook
