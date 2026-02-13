@@ -80,8 +80,10 @@ class DefaultMaskUIProvider : MaskUIProvider {
             )
             setBackgroundColor(Color.parseColor("#FFFFFF"))
             inflateMenu(R.menu.bottom_nav_menu)
-            setItemIconTintResource(R.color.bottom_nav_color)
-            setItemTextColorResource(R.color.bottom_nav_color)
+            // 使用ColorStateList设置图标和文字颜色
+            val colors = ContextCompat.getColorStateList(ctx, R.color.bottom_nav_color)
+            setItemIconTintList(colors)
+            setItemTextColor(colors)
         }
 
         bottomNav.setOnItemSelectedListener { item ->
