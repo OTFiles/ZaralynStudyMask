@@ -7,8 +7,6 @@
     <dimen name="book_card_height">120dp</dimen>
     <dimen name="card_corner_radius">16dp</dimen>
     <dimen name="card_radius">16dp</dimen>
-    <dimen name="icon_size_medium">24dp</dimen>
-    <dimen name="icon_size_large">48dp</dimen>
     <dimen name="margin_extra_small">4dp</dimen>
     <dimen name="margin_small">8dp</dimen>
     <dimen name="margin_medium">16dp</dimen>
