@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.GridLayoutManager
 import com.zaralyn.study.mask.adapter.ExploreAdapter
+import com.zaralyn.study.mask.core.ModuleClassLoaderManager
 import com.zaralyn.study.mask.data.ExploreData
 import com.zaralyn.study.mask.databinding.FragmentExploreBinding
 
@@ -34,7 +35,9 @@ class ExploreFragment : Fragment() {
     }
 
     private fun setupExploreList() {
+        val ctx = ModuleClassLoaderManager.getModuleContext()
         exploreAdapter = ExploreAdapter(
+            moduleContext = ctx,
             onExploreClicked = { exploreItem ->
                 Toast.makeText(
                     requireContext(),

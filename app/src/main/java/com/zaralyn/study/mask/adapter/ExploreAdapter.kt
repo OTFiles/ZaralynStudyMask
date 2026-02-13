@@ -1,5 +1,6 @@
 package com.zaralyn.study.mask.adapter
 
+import android.content.Context
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
@@ -9,12 +10,13 @@ import com.zaralyn.study.mask.databinding.ItemExploreCardBinding
 import com.zaralyn.study.mask.model.ExploreItem
 
 class ExploreAdapter(
+    private val moduleContext: Context,
     private val onExploreClicked: (ExploreItem) -> Unit
 ) : ListAdapter<ExploreItem, ExploreAdapter.ExploreViewHolder>(ExploreDiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ExploreViewHolder {
         val binding = ItemExploreCardBinding.inflate(
-            LayoutInflater.from(parent.context),
+            LayoutInflater.from(moduleContext),
             parent,
             false
         )

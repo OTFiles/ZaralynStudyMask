@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.zaralyn.study.mask.adapter.SettingsAdapter
+import com.zaralyn.study.mask.core.ModuleClassLoaderManager
 import com.zaralyn.study.mask.data.SettingData
 import com.zaralyn.study.mask.databinding.FragmentSettingsBinding
 
@@ -34,7 +35,9 @@ class SettingsFragment : Fragment() {
     }
 
     private fun setupSettingsList() {
+        val ctx = ModuleClassLoaderManager.getModuleContext()
         settingsAdapter = SettingsAdapter(
+            moduleContext = ctx,
             onSettingClicked = { settingItem ->
                 when (settingItem.id) {
                     "s3" -> {

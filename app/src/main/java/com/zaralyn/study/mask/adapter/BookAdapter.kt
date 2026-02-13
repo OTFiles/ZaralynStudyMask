@@ -1,5 +1,6 @@
 package com.zaralyn.study.mask.adapter
 
+import android.content.Context
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
@@ -9,12 +10,13 @@ import com.zaralyn.study.mask.databinding.ItemBookCardBinding
 import com.zaralyn.study.mask.model.Book
 
 class BookAdapter(
+    private val moduleContext: Context,
     private val onBookClicked: (Book) -> Unit
 ) : ListAdapter<Book, BookAdapter.BookViewHolder>(BookDiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): BookViewHolder {
         val binding = ItemBookCardBinding.inflate(
-            LayoutInflater.from(parent.context),
+            LayoutInflater.from(moduleContext),
             parent,
             false
         )

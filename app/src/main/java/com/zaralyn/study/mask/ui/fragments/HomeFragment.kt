@@ -61,7 +61,7 @@ class HomeFragment : Fragment() {
 
         binding.gradeContainer.removeAllViews()
 
-        for (grade in listOf(Grade.GRADE_10, Grade.GRADE_11, Grade.GRADE_12)) {
+        for (grade in listOf(Grade.GRADE_10, Grade.GRADE_11, GRADE_12)) {
             val gradeView = createGradeView(grade)
             binding.gradeContainer.addView(gradeView)
         }
@@ -110,7 +110,9 @@ class HomeFragment : Fragment() {
     }
 
     private fun setupBookList() {
+        val ctx = ModuleClassLoaderManager.getModuleContext()
         bookAdapter = BookAdapter(
+            moduleContext = ctx,
             onBookClicked = { book ->
                 val intent = Intent(requireContext(), ReaderActivity::class.java).apply {
                     putExtra("title", book.title)

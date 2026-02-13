@@ -1,5 +1,6 @@
 package com.zaralyn.study.mask.adapter
 
+import android.content.Context
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
@@ -10,12 +11,13 @@ import com.zaralyn.study.mask.model.SettingItem
 import com.zaralyn.study.mask.model.SettingType
 
 class SettingsAdapter(
+    private val moduleContext: Context,
     private val onSettingClicked: (SettingItem) -> Unit
 ) : ListAdapter<SettingItem, SettingsAdapter.SettingsViewHolder>(SettingsDiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SettingsViewHolder {
         val binding = ItemSettingBinding.inflate(
-            LayoutInflater.from(parent.context),
+            LayoutInflater.from(moduleContext),
             parent,
             false
         )
