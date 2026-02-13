@@ -1,42 +1,90 @@
 package com.zaralyn.study.mask.strategy.strategies
 
 import android.app.Activity
-import android.content.Context
-import android.view.LayoutInflater
+import android.graphics.Color
+import android.view.Gravity
 import android.view.View
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import androidx.core.content.ContextCompat
+import com.google.android.material.appbar.AppBarLayout
+import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.zaralyn.study.mask.R
 import com.zaralyn.study.mask.core.ModuleClassLoaderManager
-import com.zaralyn.study.mask.databinding.ActivityMainBinding
 import com.zaralyn.study.mask.logger.Logger
 import com.zaralyn.study.mask.logger.LogLevel
 
 /**
  * 默认的伪装UI提供者
- * 使用 ZaralynMainActivity 的布局作为伪装界面
+ * 使用纯代码创建UI，避免ClassLoader隔离问题
  */
 class DefaultMaskUIProvider : MaskUIProvider {
 
     private val logger = Logger.create("DefaultMaskUIProvider", LogLevel.DEBUG)
 
     override fun createMaskUI(activity: Activity): View {
-        // 获取模块的Context
         val ctx = ModuleClassLoaderManager.getModuleContext()
 
-        // 使用模块的Context创建LayoutInflater
-        val inflater = LayoutInflater.from(ctx)
+        // 创建根容器
+        val rootLayout = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(Color.parseColor("#F3F3F3"))
+        }
 
-        // 使用模块的Context创建DataBinding
-        val binding = ActivityMainBinding.inflate(
-            inflater,
-            null,
-            false
-        )
+        // 创建 AppBarLayout
+        val appBarLayout = AppBarLayout(ctx).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                288 // 72dp * 4 (density = 4)
+            )
+            setBackgroundColor(Color.parseColor("#1E88E5"))
+            elevation = 4f
+        }
 
-        // 设置 Toolbar
-        binding.toolbar.setTitle(R.string.app_name)
+        // 创建 Toolbar
+        val toolbar = MaterialToolbar(ctx).apply {
+            layoutParams = AppBarLayout.LayoutParams(
+                AppBarLayout.LayoutParams.MATCH_PARENT,
+                AppBarLayout.LayoutParams.MATCH_PARENT
+            )
+            elevation = 4f
+            setTitle(R.string.app_name)
+            setTitleTextColor(Color.WHITE)
+            setNavigationIcon(R.drawable.ic_menu_book)
+            setNavigationIconTint(Color.WHITE)
+        }
 
-        // 设置底部导航
-        binding.bottomNavigationView.setOnItemSelectedListener { item ->
+        appBarLayout.addView(toolbar)
+
+        // 创建 Fragment 容器
+        val fragmentContainer = FrameLayout(ctx).apply {
+            id = R.id.fragmentContainer
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1.0f
+            )
+        }
+
+        // 创建底部导航栏
+        val bottomNav = BottomNavigationView(ctx).apply {
+            id = R.id.bottomNavigationView
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                224 // 56dp * 4 (density = 4)
+            )
+            setBackgroundColor(Color.parseColor("#FFFFFF"))
+            inflateMenu(R.menu.bottom_nav_menu)
+            setItemIconTintResource(R.color.bottom_nav_color)
+            setItemTextColorResource(R.color.bottom_nav_color)
+        }
+
+        bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.navigation_home -> {
                     loadFragment(activity, "com.zaralyn.study.mask.ui.fragments.HomeFragment")
@@ -54,10 +102,15 @@ class DefaultMaskUIProvider : MaskUIProvider {
             }
         }
 
+        // 添加所有视图到根容器
+        rootLayout.addView(appBarLayout)
+        rootLayout.addView(fragmentContainer)
+        rootLayout.addView(bottomNav)
+
         // 默认加载主页
         loadFragment(activity, "com.zaralyn.study.mask.ui.fragments.HomeFragment")
 
-        return binding.root
+        return rootLayout
     }
 
     /**
