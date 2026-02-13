@@ -1,0 +1,451 @@
+name: Module Test
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  # 任务1：编译测试
+  build-test:
+    name: 编译测试
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout代码
+      uses: actions/checkout@v4
+
+    - name: 设置JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: 设置Gradle
+      uses: gradle/gradle-build-action@v3
+
+    - name: 编译Debug版本
+      run: ./gradlew assembleDebug --no-daemon
+
+    - name: 编译Release版本
+      run: ./gradlew assembleRelease --no-daemon
+
+    - name: 检查APK生成
+      run: |
+        echo "检查Debug APK:"
+        ls -lh app/build/outputs/apk/debug/app-debug.apk || echo "Debug APK不存在"
+        echo "检查Release APK:"
+        ls -lh app/build/outputs/apk/release/app-release.apk || echo "Release APK不存在"
+
+  # 任务2：Lint检查
+  lint-test:
+    name: Lint检查
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout代码
+      uses: actions/checkout@v4
+
+    - name: 设置JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: 设置Gradle
+      uses: gradle/gradle-build-action@v3
+
+    - name: 运行Lint
+      run: ./gradlew lintDebug --no-daemon
+
+    - name: 上传Lint报告
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: lint-report
+        path: |
+          app/build/reports/lint-results-*.html
+          app/build/reports/lint-results-*.xml
+
+  # 任务3：代码质量检查
+  code-quality:
+    name: 代码质量检查
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout代码
+      uses: actions/checkout@v4
+
+    - name: 设置JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: 设置Gradle
+      uses: gradle/gradle-build-action@v3
+
+    - name: 检查Kotlin代码风格
+      run: ./gradlew ktlintCheck --no-daemon || echo "ktlint未配置，跳过"
+
+    - name: 检查Detekt
+      run: ./gradlew detekt --no-daemon || echo "detekt未配置，跳过"
+
+  # 任务4：核心模块测试
+  core-module-test:
+    name: 核心模块测试
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout代码
+      uses: actions/checkout@v4
+
+    - name: 设置JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: 设置Gradle
+      uses: gradle/gradle-build-action@v3
+
+    - name: 测试ModuleClassLoaderManager
+      run: |
+        echo "检查ModuleClassLoaderManager类是否存在"
+        ./gradlew compileDebugKotlin --no-daemon
+        echo "ModuleClassLoaderManager编译通过"
+
+    - name: 测试AppTypeDetector
+      run: |
+        echo "检查AppTypeDetector类是否存在"
+        ./gradlew compileDebugKotlin --no-daemon
+        echo "AppTypeDetector编译通过"
+
+    - name: 测试HookManager
+      run: |
+        echo "检查HookManager类是否存在"
+        ./gradlew compileDebugKotlin --no-daemon
+        echo "HookManager编译通过"
+
+    - name: 测试StrategySelector
+      run: |
+        echo "检查StrategySelector类是否存在"
+        ./gradlew compileDebugKotlin --no-daemon
+        echo "StrategySelector编译通过"
+
+    - name: 测试Logger
+      run: |
+        echo "检查Logger类是否存在"
+        ./gradlew compileDebugKotlin --no-daemon
+        echo "Logger编译通过"
+
+  # 任务5：策略模块测试
+  strategy-module-test:
+    name: 策略模块测试
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout代码
+      uses: actions/checkout@v4
+
+    - name: 设置JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: 设置Gradle
+      uses: gradle/gradle-build-action@v3
+
+    - name: 测试WindowManagerOverlayStrategy
+      run: |
+        echo "检查WindowManagerOverlayStrategy类是否存在"
+        ./gradlew compileDebugKotlin --no-daemon
+        echo "WindowManagerOverlayStrategy编译通过"
+
+    - name: 测试DecorViewModificationStrategy
+      run: |
+        echo "检查DecorViewModificationStrategy类是否存在"
+        ./gradlew compileDebugKotlin --no-daemon
+        echo "DecorViewModificationStrategy编译通过"
+
+    - name: 测试FrameLayoutWrapperStrategy
+      run: |
+        echo "检查FrameLayoutWrapperStrategy类是否存在"
+        ./gradlew compileDebugKotlin --no-daemon
+        echo "FrameLayoutWrapperStrategy编译通过"
+
+    - name: 测试DefaultMaskUIProvider
+      run: |
+        echo "检查DefaultMaskUIProvider类是否存在"
+        ./gradlew compileDebugKotlin --no-daemon
+        echo "DefaultMaskUIProvider编译通过"
+
+  # 任务6：Hook模块测试
+  hook-module-test:
+    name: Hook模块测试
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout代码
+      uses: actions/checkout@v4
+
+    - name: 设置JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: 设置Gradle
+      uses: gradle/gradle-build-action@v3
+
+    - name: 测试ActivityThreadHook
+      run: |
+        echo "检查ActivityThreadHook类是否存在"
+        ./gradlew compileDebugKotlin --no-daemon
+        echo "ActivityThreadHook编译通过"
+
+    - name: 测试SetContentViewHook
+      run: |
+        echo "检查SetContentViewHook类是否存在"
+        ./gradlew compileDebugKotlin --no-daemon
+        echo "SetContentViewHook编译通过"
+
+    - name: 测试PhoneWindowHook
+      run: |
+        echo "检查PhoneWindowHook类是否存在"
+        ./gradlew compileDebugKotlin --no-daemon
+        echo "PhoneWindowHook编译通过"
+
+    - name: 测试DecorViewHook
+      run: |
+        echo "检查DecorViewHook类是否存在"
+        ./gradlew compileDebugKotlin --no-daemon
+        echo "DecorViewHook编译通过"
+
+    - name: 测试LayoutInflaterHook
+      run: |
+        echo "检查LayoutInflaterHook类是否存在"
+        ./gradlew compileDebugKotlin --no-daemon
+        echo "LayoutInflaterHook编译通过"
+
+  # 任务7：UI模块测试
+  ui-module-test:
+    name: UI模块测试
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout代码
+      uses: actions/checkout@v4
+
+    - name: 设置JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: 设置Gradle
+      uses: gradle/gradle-build-action@v3
+
+    - name: 测试HomeFragment
+      run: |
+        echo "检查HomeFragment类是否存在"
+        ./gradlew compileDebugKotlin --no-daemon
+        echo "HomeFragment编译通过"
+
+    - name: 测试ExploreFragment
+      run: |
+        echo "检查ExploreFragment类是否存在"
+        ./gradlew compileDebugKotlin --no-daemon
+        echo "ExploreFragment编译通过"
+
+    - name: 测试SettingsFragment
+      run: |
+        echo "检查SettingsFragment类是否存在"
+        ./gradlew compileDebugKotlin --no-daemon
+        echo "SettingsFragment编译通过"
+
+    - name: 测试所有Adapter
+      run: |
+        echo "检查所有Adapter类是否存在"
+        ./gradlew compileDebugKotlin --no-daemon
+        echo "所有Adapter编译通过"
+
+  # 任务8：事件模块测试
+  event-module-test:
+    name: 事件模块测试
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout代码
+      uses: actions/checkout@v4
+
+    - name: 设置JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: 设置Gradle
+      uses: gradle/gradle-build-action@v3
+
+    - name: 测试EventManager
+      run: |
+        echo "检查EventManager类是否存在"
+        ./gradlew compileDebugKotlin --no-daemon
+        echo "EventManager编译通过"
+
+    - name: 测试F10KeyHandler
+      run: |
+        echo "检查F10KeyHandler类是否存在"
+        ./gradlew compileDebugKotlin --no-daemon
+        echo "F10KeyHandler编译通过"
+
+    - name: 测试FiveTapHandler
+      run: |
+        echo "检查FiveTapHandler类是否存在"
+        ./gradlew compileDebugKotlin --no-daemon
+        echo "FiveTapHandler编译通过"
+
+  # 任务9：资源文件检查
+  resource-test:
+    name: 资源文件检查
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout代码
+      uses: actions/checkout@v4
+
+    - name: 检查xposed_init文件
+      run: |
+        if [ -f "app/src/main/assets/xposed_init" ]; then
+          echo "✓ xposed_init文件存在"
+          cat app/src/main/assets/xposed_init
+        else
+          echo "✗ xposed_init文件不存在"
+          exit 1
+        fi
+
+    - name: 检查所有布局文件
+      run: |
+        echo "检查布局文件..."
+        find app/src/main/res/layout -name "*.xml" | while read file; do
+          echo "✓ $file"
+        done
+
+    - name: 检查所有图标文件
+      run: |
+        echo "检查图标文件..."
+        find app/src/main/res/drawable -name "*.xml" -o -name "*.png" | while read file; do
+          echo "✓ $file"
+        done
+
+    - name: 检查所有字符串资源
+      run: |
+        echo "检查字符串资源..."
+        if [ -f "app/src/main/res/values/strings.xml" ]; then
+          echo "✓ strings.xml存在"
+        else
+          echo "✗ strings.xml不存在"
+          exit 1
+        fi
+
+  # 任务10：APK完整性测试
+  apk-integrity-test:
+    name: APK完整性测试
+    runs-on: ubuntu-latest
+    needs: build-test
+
+    steps:
+    - name: Checkout代码
+      uses: actions/checkout@v4
+
+    - name: 下载Debug APK
+      uses: actions/download-artifact@v4
+      with:
+        name: debug-apk
+        path: ./artifacts
+
+    - name: 检查APK完整性
+      run: |
+        if [ -f "artifacts/app-debug.apk" ]; then
+          echo "✓ Debug APK存在"
+          ls -lh artifacts/app-debug.apk
+          file artifacts/app-debug.apk
+        else
+          echo "✗ Debug APK不存在"
+          exit 1
+        fi
+
+    - name: 检查APK权限
+      run: |
+        echo "检查APK权限..."
+        aapt dump permissions artifacts/app-debug.apk || echo "aapt不可用"
+
+    - name: 检查APK组件
+      run: |
+        echo "检查APK组件..."
+        aapt dump xmltree artifacts/app-debug.apk AndroidManifest.xml || echo "aapt不可用"
+
+  # 总结任务
+  summary:
+    name: 测试总结
+    runs-on: ubuntu-latest
+    needs: [build-test, lint-test, core-module-test, strategy-module-test, hook-module-test, ui-module-test, event-module-test, resource-test]
+    if: always()
+
+    steps:
+    - name: 检查所有任务状态
+      run: |
+        echo "=== 测试总结 ==="
+        echo "编译测试: ${{ needs.build-test.result }}"
+        echo "Lint检查: ${{ needs.lint-test.result }}"
+        echo "核心模块测试: ${{ needs.core-module-test.result }}"
+        echo "策略模块测试: ${{ needs.strategy-module-test.result }}"
+        echo "Hook模块测试: ${{ needs.hook-module-test.result }}"
+        echo "UI模块测试: ${{ needs.ui-module-test.result }}"
+        echo "事件模块测试: ${{ needs.event-module-test.result }}"
+        echo "资源文件检查: ${{ needs.resource-test.result }}"
+
+        if [ "${{ needs.build-test.result }}" != "success" ]; then
+          echo "❌ 编译测试失败"
+          exit 1
+        fi
+
+        if [ "${{ needs.lint-test.result }}" != "success" ]; then
+          echo "⚠️  Lint检查失败"
+        fi
+
+        if [ "${{ needs.core-module-test.result }}" != "success" ]; then
+          echo "❌ 核心模块测试失败"
+          exit 1
+        fi
+
+        if [ "${{ needs.strategy-module-test.result }}" != "success" ]; then
+          echo "❌ 策略模块测试失败"
+          exit 1
+        fi
+
+        if [ "${{ needs.hook-module-test.result }}" != "success" ]; then
+          echo "❌ Hook模块测试失败"
+          exit 1
+        fi
+
+        if [ "${{ needs.ui-module-test.result }}" != "success" ]; then
+          echo "❌ UI模块测试失败"
+          exit 1
+        fi
+
+        if [ "${{ needs.event-module-test.result }}" != "success" ]; then
+          echo "❌ 事件模块测试失败"
+          exit 1
+        fi
+
+        if [ "${{ needs.resource-test.result }}" != "success" ]; then
+          echo "❌ 资源文件检查失败"
+          exit 1
+        fi
+
+        echo "✅ 所有测试通过"

@@ -14,7 +14,9 @@ object ModuleClassLoaderManager {
 
     private const val TAG = "ModuleClassLoaderManager"
 
-    private var moduleContextRef: WeakReference<Context>? = null
+    // 使用强引用保持Context，因为Xposed模块需要在整个应用生命周期内访问模块资源
+    // Context.createPackageContext()返回的是Application Context，不会造成内存泄漏
+    private var moduleContext: Context? = null
     private var moduleClassLoader: ClassLoader? = null
     private var isInitialized = false
 
@@ -32,13 +34,14 @@ object ModuleClassLoaderManager {
 
         try {
             // 创建模块的Context
+            // 使用ApplicationContext，避免与Activity生命周期绑定
             val context = targetContext.createPackageContext(
                 Constants.PACKAGE_NAME,
                 Context.CONTEXT_IGNORE_SECURITY
             )
 
-            // 使用WeakReference包裹Context以防止内存泄漏
-            moduleContextRef = WeakReference(context)
+            // 保存Context引用（强引用，因为模块需要持续访问）
+            moduleContext = context
 
             // 获取模块的ClassLoader
             // 使用当前类的ClassLoader作为模块的ClassLoader
@@ -56,11 +59,10 @@ object ModuleClassLoaderManager {
      * 获取模块的Context
      */
     fun getModuleContext(): Context {
-        if (!isInitialized) {
+        if (!isInitialized || moduleContext == null) {
             throw IllegalStateException("ModuleClassLoaderManager not initialized. Call initialize() first.")
         }
-        return moduleContextRef?.get()
-            ?: throw IllegalStateException("ModuleClassLoaderManager: Context has been garbage collected")
+        return moduleContext!!
     }
 
     /**
@@ -82,8 +84,7 @@ object ModuleClassLoaderManager {
      * 重置（用于测试）
      */
     fun reset() {
-        moduleContextRef?.clear()
-        moduleContextRef = null
+        moduleContext = null
         moduleClassLoader = null
         isInitialized = false
     }
