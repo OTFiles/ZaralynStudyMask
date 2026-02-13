@@ -58,9 +58,22 @@ ZaralynStudyMask（简称 Zara）是一个 Xposed/NPatch 模块，用于为 Andr
 - 工作流文件：
   - `.github/workflows/build.yml` - 编译工作流
   - `.github/workflows/test.yml` - 测试工作流（Lint检查）
+  - `.github/workflows/module-test.yml` - 模块测试工作流（全面测试）
 - 使用 `gradle/gradle-build-action@v3` 处理 Gradle 下载和缓存
 - 使用 JDK 17 (temurin distribution)
 - 自动上传编译产物为 artifacts
+
+**模块测试工作流包含10个测试任务**：
+1. 编译测试 - 验证Debug和Release版本都能编译
+2. Lint检查 - 检查代码质量问题
+3. 代码质量检查 - ktlint和detekt检查
+4. 核心模块测试 - ModuleClassLoaderManager、AppTypeDetector、HookManager等
+5. 策略模块测试 - 3个UI替换策略
+6. Hook模块测试 - 5个Hook策略
+7. UI模块测试 - 3个Fragment和所有Adapter
+8. 事件模块测试 - EventManager和事件处理器
+9. 资源文件检查 - 检查所有资源文件完整性
+10. APK完整性测试 - 验证APK结构和内容
 
 ---
 
@@ -183,8 +196,13 @@ app/src/main/
 
 **关键特性**：
 - 使用`createPackageContext()`创建模块Context
-- 使用`WeakReference`包裹Context防止内存泄漏
+- 使用强引用保持Context（使用Application Context，不会造成内存泄漏）
 - 提供统一的模块ClassLoader和Context访问接口
+
+**重要说明**：
+- 使用强引用保持Context，因为Xposed模块需要在整个应用生命周期内访问模块资源
+- 使用`createPackageContext()`返回的Application Context，不会造成内存泄漏
+- WeakReference在GC时会被回收，导致Context丢失，因此改用强引用
 
 **使用示例**：
 ```kotlin
@@ -441,10 +459,14 @@ val bottomNav = BottomNavigationView(themedContext)
 ### Kotlin 编码规范
 
 - 使用安全类型转换 `as?` 而非强制转换 `as`
+
 - 为 nullable 类型添加适当的 null 检查
+
 - 使用 `companion object` 定义常量
+
 - 遵循 Kotlin 官方代码风格（`kotlin.code.style=official`）
-- 使用`WeakReference`防止内存泄漏
+
+- 对于Xposed模块的Context管理，使用强引用保持Application Context（不会造成内存泄漏）
 
 ---
 
@@ -463,6 +485,7 @@ val bottomNav = BottomNavigationView(themedContext)
 - Fragment类必须使用模块ClassLoader加载
 - Fragment的LayoutInflater必须使用模块Context创建
 - Material组件必须使用ContextThemeWrapper包装Context
+- **重要**：Xposed模块的Context管理使用强引用（Application Context），不要使用WeakReference
 
 ---
 
@@ -613,6 +636,23 @@ val bottomNav = BottomNavigationView(themedContext)
 **原因**：缺少kotlin-kapt插件
 **修复**：在build.gradle中添加kotlin-kapt插件
 
+### 10. Context被垃圾回收问题（232af8c）
+**问题**：雨见浏览器闪退，Minecraft不伪装UI
+**日志**：`ModuleClassLoaderManager: Context has been garbage collected`
+**原因**：使用WeakReference<Context>包裹Context，在GC时被回收，导致Context丢失
+**修复**：将WeakReference改为强引用，使用Application Context（不会造成内存泄漏）
+
+### 11. Module Test工作流APK下载失败（c193ecb）
+**问题**：APK完整性测试失败，无法下载APK
+**日志**：`Artifact not found for name: debug-apk`
+**原因**：build-test任务编译了APK但没有上传artifact
+**修复**：在build-test任务中添加上传Debug和Release APK的步骤
+
+### 12. GitHub Actions模块测试工作流（232af8c）
+**问题**：缺少全面的模块测试
+**原因**：只有基本的编译和Lint检查
+**修复**：创建module-test.yml工作流，包含10个测试任务，覆盖所有核心模块
+
 ### 历史修复（旧版本）
 - F10 死循环问题 - 改用 Intent extras 传递状态标志
 - 年级选择不刷新问题 - 使用 View ID 进行精确定位
@@ -711,6 +751,7 @@ val bottomNav = BottomNavigationView(themedContext)
 - Fragment类必须使用模块ClassLoader加载
 - Fragment的LayoutInflater必须使用模块Context创建
 - Material组件必须使用ContextThemeWrapper包装Context
+- **重要**：ModuleClassLoaderManager使用强引用保持Context（Application Context），确保在整个Xposed模块生命周期内可用
 
 ### 状态管理
 - 使用 Intent extras 传递跨实例状态标志
@@ -721,7 +762,7 @@ val bottomNav = BottomNavigationView(themedContext)
 - 过滤系统进程，避免 Hook 系统关键组件
 - 使用安全类型转换，防止 ClassCastException
 - 为所有 Hook 添加 try-catch 块，防止单个 Hook 失败影响整体
-- 使用WeakReference防止内存泄漏
+- ModuleClassLoaderManager使用强引用保持Context（Application Context），不会造成内存泄漏
 
 ### 调试
 - 所有关键操作都有日志输出
