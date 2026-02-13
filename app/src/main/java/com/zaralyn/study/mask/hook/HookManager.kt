@@ -2,6 +2,7 @@ package com.zaralyn.study.mask.hook
 
 import android.app.Activity
 import android.content.Intent
+import com.zaralyn.study.mask.core.ModuleClassLoaderManager
 import com.zaralyn.study.mask.core.config.HookConfig
 import com.zaralyn.study.mask.detector.AppType
 import com.zaralyn.study.mask.detector.AppTypeDetector
@@ -74,7 +75,6 @@ class HookManager(
     
     /**
      * 安装所有Hook
-     * 注意：在Hook安装阶段无法获取SharedPreferences，实际使用时在UI替换阶段通过Activity获取
      */
     fun installHooks() {
         var successCount = 0
@@ -105,10 +105,10 @@ class HookManager(
                     isMainActivity = false, // 将在Hook执行时确定
                     mainActivityClass = mainActivityClass,
                     intent = null, // 将在Hook执行时获取
-                    prefs = null, // 在Hook安装阶段无法获取SharedPreferences，在UI替换时通过Activity获取
+                    prefs = null, // 注意：在Hook安装阶段无法获取SharedPreferences，实际使用时在UI替换阶段通过Activity获取
                     logger = logger
                 )
-
+                
                 if (strategy.install(context)) {
                     successCount++
                     logger.info("Installed hook: ${strategy.getName()}")
@@ -121,7 +121,7 @@ class HookManager(
                 logger.error("Error installing hook ${strategy.getName()}: ${e.message}", e)
             }
         }
-
+        
         logger.info("Hook installation complete: $successCount succeeded, $failCount failed")
     }
     
@@ -175,6 +175,17 @@ class HookManager(
     private fun handleUIReplacement(activity: Activity, hookContext: HookContext) {
         try {
             logger.info("Replacing UI for ${activity.javaClass.name}")
+
+            // 初始化ModuleClassLoaderManager（只在第一次时初始化）
+            if (!ModuleClassLoaderManager.isReady()) {
+                try {
+                    ModuleClassLoaderManager.initialize(activity)
+                    logger.info("ModuleClassLoaderManager initialized")
+                } catch (e: Exception) {
+                    logger.error("Failed to initialize ModuleClassLoaderManager: ${e.message}", e)
+                    // 继续尝试，可能使用降级方案
+                }
+            }
 
             // 通过Activity获取SharedPreferences
             val prefs = try {

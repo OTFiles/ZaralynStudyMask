@@ -13,7 +13,7 @@ import com.zaralyn.study.mask.R
 import com.zaralyn.study.mask.ReaderActivity
 import com.zaralyn.study.mask.adapter.BookAdapter
 import com.zaralyn.study.mask.adapter.GradeAdapter
-import com.zaralyn.study.mask.core.constants.Constants
+import com.zaralyn.study.mask.core.ModuleClassLoaderManager
 import com.zaralyn.study.mask.data.BookData
 import com.zaralyn.study.mask.databinding.FragmentHomeBinding
 import com.zaralyn.study.mask.logger.Logger
@@ -28,9 +28,6 @@ class HomeFragment : Fragment() {
     private var currentGrade = Grade.GRADE_10
     private lateinit var gradeAdapter: GradeAdapter
     private lateinit var bookAdapter: BookAdapter
-
-    // 模块Context缓存
-    private var moduleContext: Context? = null
 
     private val logger = Logger.create("HomeFragment", LogLevel.DEBUG)
 
@@ -50,27 +47,8 @@ class HomeFragment : Fragment() {
         setupBookList()
     }
 
-    /**
-     * 获取模块的Context
-     */
-    private fun getModuleContext(): Context {
-        if (moduleContext == null) {
-            try {
-                moduleContext = requireContext().createPackageContext(
-                    Constants.PACKAGE_NAME,
-                    Context.CONTEXT_IGNORE_SECURITY
-                )
-            } catch (e: Exception) {
-                logger.error("Failed to create module context: ${e.message}", e)
-                // 降级使用当前Context
-                moduleContext = requireContext()
-            }
-        }
-        return moduleContext!!
-    }
-
     private fun setupGradeSelection() {
-        val ctx = getModuleContext()
+        val ctx = ModuleClassLoaderManager.getModuleContext()
         gradeAdapter = GradeAdapter(
             moduleContext = ctx,
             grades = listOf(Grade.GRADE_10, Grade.GRADE_11, Grade.GRADE_12),
@@ -93,7 +71,7 @@ class HomeFragment : Fragment() {
     }
 
     private fun createGradeView(grade: Grade): View {
-        val ctx = getModuleContext()
+        val ctx = ModuleClassLoaderManager.getModuleContext()
         val inflater = LayoutInflater.from(ctx)
         val gradeView = inflater.inflate(R.layout.item_grade_card, binding.gradeContainer, false)
 
@@ -108,7 +86,7 @@ class HomeFragment : Fragment() {
         currentGrade = grade
 
         // 更新所有年级卡片的选中状态
-        val ctx = getModuleContext()
+        val ctx = ModuleClassLoaderManager.getModuleContext()
         for (i in 0 until binding.gradeContainer.childCount) {
             val child = binding.gradeContainer.getChildAt(i)
             val cardView = child.findViewById<androidx.cardview.widget.CardView>(R.id.cardView)

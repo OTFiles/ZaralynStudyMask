@@ -5,7 +5,7 @@ import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
 import com.zaralyn.study.mask.R
-import com.zaralyn.study.mask.core.constants.Constants
+import com.zaralyn.study.mask.core.ModuleClassLoaderManager
 import com.zaralyn.study.mask.databinding.ActivityMainBinding
 import com.zaralyn.study.mask.logger.Logger
 import com.zaralyn.study.mask.logger.LogLevel
@@ -16,14 +16,11 @@ import com.zaralyn.study.mask.logger.LogLevel
  */
 class DefaultMaskUIProvider : MaskUIProvider {
 
-    // 缓存模块Context，避免重复创建
-    private var moduleContext: Context? = null
-
     private val logger = Logger.create("DefaultMaskUIProvider", LogLevel.DEBUG)
 
     override fun createMaskUI(activity: Activity): View {
         // 获取模块的Context
-        val ctx = getModuleContext(activity)
+        val ctx = ModuleClassLoaderManager.getModuleContext()
 
         // 使用模块的Context创建LayoutInflater
         val inflater = LayoutInflater.from(ctx)
@@ -61,27 +58,6 @@ class DefaultMaskUIProvider : MaskUIProvider {
         loadFragment(activity, "com.zaralyn.study.mask.ui.fragments.HomeFragment")
 
         return binding.root
-    }
-
-    /**
-     * 获取模块的Context
-     * 使用 createPackageContext 创建模块的Context，用于访问模块资源
-     */
-    private fun getModuleContext(activity: Activity): Context {
-        // 缓存模块Context
-        if (moduleContext == null) {
-            try {
-                // 创建模块的Context，忽略安全检查
-                moduleContext = activity.createPackageContext(
-                    Constants.PACKAGE_NAME,
-                    Context.CONTEXT_IGNORE_SECURITY
-                )
-            } catch (e: Exception) {
-                logger.error("Failed to create module context: ${e.message}", e)
-                throw RuntimeException("Failed to create module context: ${e.message}", e)
-            }
-        }
-        return moduleContext!!
     }
 
     /**
