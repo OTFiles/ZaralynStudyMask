@@ -46,3 +46,6 @@ AGENTS.md
 error.md
 
 *.log
+
+# Gradle Wrapper - MUST be committed
+!gradle/wrapper/gradle-wrapper.jar

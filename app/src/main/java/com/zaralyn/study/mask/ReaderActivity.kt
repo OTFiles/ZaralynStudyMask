@@ -1,6 +1,7 @@
 package com.zaralyn.study.mask
 
 import android.os.Bundle
+import android.os.Environment
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
@@ -44,7 +45,8 @@ class ReaderActivity : AppCompatActivity() {
         }
 
         // 尝试从外部存储读取
-        val externalFile = File("/sdcard/EnglishBook/$fileName")
+        val externalDir = File(Environment.getExternalStorageDirectory(), "EnglishBook")
+        val externalFile = File(externalDir, fileName)
         if (externalFile.exists()) {
             try {
                 val content = externalFile.readText()

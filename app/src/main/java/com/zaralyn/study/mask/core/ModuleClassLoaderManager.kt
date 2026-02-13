@@ -4,6 +4,7 @@ import android.content.Context
 import com.zaralyn.study.mask.core.constants.Constants
 import com.zaralyn.study.mask.logger.Logger
 import de.robv.android.xposed.XposedBridge
+import java.lang.ref.WeakReference
 
 /**
  * 模块ClassLoader管理器
@@ -13,7 +14,7 @@ object ModuleClassLoaderManager {
 
     private const val TAG = "ModuleClassLoaderManager"
 
-    private var moduleContext: Context? = null
+    private var moduleContextRef: WeakReference<Context>? = null
     private var moduleClassLoader: ClassLoader? = null
     private var isInitialized = false
 
@@ -31,10 +32,13 @@ object ModuleClassLoaderManager {
 
         try {
             // 创建模块的Context
-            moduleContext = targetContext.createPackageContext(
+            val context = targetContext.createPackageContext(
                 Constants.PACKAGE_NAME,
                 Context.CONTEXT_IGNORE_SECURITY
             )
+
+            // 使用WeakReference包裹Context以防止内存泄漏
+            moduleContextRef = WeakReference(context)
 
             // 获取模块的ClassLoader
             // 使用当前类的ClassLoader作为模块的ClassLoader
@@ -52,10 +56,11 @@ object ModuleClassLoaderManager {
      * 获取模块的Context
      */
     fun getModuleContext(): Context {
-        if (!isInitialized || moduleContext == null) {
+        if (!isInitialized) {
             throw IllegalStateException("ModuleClassLoaderManager not initialized. Call initialize() first.")
         }
-        return moduleContext!!
+        return moduleContextRef?.get()
+            ?: throw IllegalStateException("ModuleClassLoaderManager: Context has been garbage collected")
     }
 
     /**
@@ -77,7 +82,8 @@ object ModuleClassLoaderManager {
      * 重置（用于测试）
      */
     fun reset() {
-        moduleContext = null
+        moduleContextRef?.clear()
+        moduleContextRef = null
         moduleClassLoader = null
         isInitialized = false
     }
