@@ -24,7 +24,10 @@ class SettingsFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        _binding = FragmentSettingsBinding.inflate(inflater, container, false)
+        // 使用模块Context创建LayoutInflater，确保DataBinding使用正确的ClassLoader
+        val ctx = ModuleClassLoaderManager.getModuleContext()
+        val moduleInflater = LayoutInflater.from(ctx)
+        _binding = FragmentSettingsBinding.inflate(moduleInflater, container, false)
         return binding.root
     }
 
