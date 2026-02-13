@@ -127,7 +127,11 @@ class DefaultMaskUIProvider : MaskUIProvider {
                 return
             }
 
-            val fragmentClass = Class.forName(fragmentClassName)
+            // 关键修复：使用模块ClassLoader加载Fragment类
+            val moduleClassLoader = ModuleClassLoaderManager.getModuleClassLoader()
+            val fragmentClass = moduleClassLoader.loadClass(fragmentClassName)
+
+            // 创建Fragment实例
             val fragment = fragmentClass.newInstance()
 
             // 安全的类型转换
@@ -142,6 +146,10 @@ class DefaultMaskUIProvider : MaskUIProvider {
             fragmentManager.beginTransaction()
                 .replace(R.id.fragmentContainer, fragment)
                 .commit()
+
+            logger.info("Fragment loaded successfully: $fragmentClassName")
+        } catch (e: ClassNotFoundException) {
+            logger.error("Fragment class not found: $fragmentClassName - ${e.message}")
         } catch (e: Exception) {
             logger.error("Failed to load fragment: ${e.message}", e)
         }
