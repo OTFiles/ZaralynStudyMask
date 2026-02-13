@@ -39,6 +39,18 @@ jobs:
         echo "检查Release APK:"
         ls -lh app/build/outputs/apk/release/app-release.apk || echo "Release APK不存在"
 
+    - name: 上传Debug APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: debug-apk
+        path: app/build/outputs/apk/debug/app-debug.apk
+
+    - name: 上传Release APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-apk
+        path: app/build/outputs/apk/release/app-release.apk
+
   # 任务2：Lint检查
   lint-test:
     name: Lint检查
