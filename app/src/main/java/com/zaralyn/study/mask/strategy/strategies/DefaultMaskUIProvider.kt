@@ -6,6 +6,8 @@ import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.appcompat.view.ContextThemeWrapper
 import androidx.core.content.ContextCompat
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.MaterialToolbar
@@ -36,8 +38,11 @@ class DefaultMaskUIProvider : MaskUIProvider {
             setBackgroundColor(Color.parseColor("#F3F3F3"))
         }
 
-        // 创建 AppBarLayout
-        val appBarLayout = AppBarLayout(ctx).apply {
+        // 使用ContextThemeWrapper包装Context，为Material组件提供AppCompat主题
+        val themedContext = ContextThemeWrapper(ctx, R.style.Theme_ZaralynStudyMask)
+
+        // 创建 AppBarLayout（使用themedContext）
+        val appBarLayout = AppBarLayout(themedContext).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 288 // 72dp * 4 (density = 4)
@@ -46,8 +51,8 @@ class DefaultMaskUIProvider : MaskUIProvider {
             elevation = 4f
         }
 
-        // 创建 Toolbar
-        val toolbar = MaterialToolbar(ctx).apply {
+        // 创建 Toolbar（使用themedContext）
+        val toolbar = MaterialToolbar(themedContext).apply {
             layoutParams = AppBarLayout.LayoutParams(
                 AppBarLayout.LayoutParams.MATCH_PARENT,
                 AppBarLayout.LayoutParams.MATCH_PARENT
@@ -71,8 +76,8 @@ class DefaultMaskUIProvider : MaskUIProvider {
             )
         }
 
-        // 创建底部导航栏
-        val bottomNav = BottomNavigationView(ctx).apply {
+        // 创建底部导航栏（使用themedContext）
+        val bottomNav = BottomNavigationView(themedContext).apply {
             id = R.id.bottomNavigationView
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -81,7 +86,7 @@ class DefaultMaskUIProvider : MaskUIProvider {
             setBackgroundColor(Color.parseColor("#FFFFFF"))
             inflateMenu(R.menu.bottom_nav_menu)
             // 使用ColorStateList设置图标和文字颜色
-            val colors = ContextCompat.getColorStateList(ctx, R.color.bottom_nav_color)
+            val colors = ContextCompat.getColorStateList(themedContext, R.color.bottom_nav_color)
             setItemIconTintList(colors)
             setItemTextColor(colors)
         }
@@ -97,7 +102,7 @@ class DefaultMaskUIProvider : MaskUIProvider {
                     true
                 }
                 R.id.navigation_settings -> {
-                    loadFragment(activity, "com.zaralyn.study.mask.ui.fragments.SettingsFragment")
+                    loadFragment(activity, com.zaralyn.study.mask.ui.fragments.SettingsFragment::class.java.name)
                     true
                 }
                 else -> false
